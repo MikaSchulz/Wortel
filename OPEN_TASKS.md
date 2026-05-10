@@ -3,8 +3,8 @@
 Diese Datei fasst die offenen und optionalen Punkte zusammen, priorisiert sie grob und beschreibt konkrete Umsetzungsschritte sowie Beispielbefehle.
 
 ## Kurz-Checklist (Prioritätsempfehlung)
-- [ ] High: Sicherstellen, dass JDK 25 zuverlässig verwendet werden kann (Toolchain / Install)
-- [ ] High: `application.properties` → `application.yml` konvertieren
+- [x] High: Sicherstellen, dass JDK 25 zuverlässig verwendet werden kann (Toolchain / Install)
+- [x] High: `application.properties` → `application.yml` konvertieren
 - [ ] Medium: Saubere Paketstruktur aus Beispiel-Layout machen
 - [ ] Medium: `./gradlew wrapper` auf gewünschte Gradle-Version prüfen/locken (>= 9.1)
 - [ ] Medium: Optional — Projekt auf Kotlin umstellen (größere Aufgabe)
@@ -21,6 +21,10 @@ Diese Datei fasst die offenen und optionalen Punkte zusammen, priorisiert sie gr
   1. Prüfe systemweit: `java -version` und `echo $JAVA_HOME`.
   2. Falls JDK 25 fehlt, installiere es (z. B. SDKMAN, Homebrew, Adoptium) oder konfiguriere Gradle, eine JDK-Installation zu verwenden.
   3. Build testen: `./gradlew clean build -x test`.
+ - Umsetzung (erledigt):
+   - Datei `gradle.properties` wurde hinzugefügt mit `org.gradle.java.installations.auto-download=true`, damit Gradle JDKs für Toolchains automatisch herunterladen kann, falls lokal nicht vorhanden.
+   - `build.gradle.kts` enthält die Toolchain-Einstellung `languageVersion.set(JavaLanguageVersion.of(25))`.
+ - Verifiziert: Ich habe `./gradlew --version` und `./gradlew clean build -x test` ausgeführt — Gradle läuft mit Launcher JVM 25.x und der Build war erfolgreich.
 - Risiken: Wenn JDK 25 nicht installiert ist, kann Gradle fehlschlagen, wenn nicht per Toolchain heruntergeladen/verwaltet.
 
 ### 2) `application.properties` → `application.yml`
@@ -39,6 +43,10 @@ spring:
 ```
 
   3. Entferne oder behalte die alte `.properties` als Backup (Spring lädt `application.yml` bevorzugt, wenn vorhanden).
+
+ - Umsetzung (erledigt):
+   - Es wurde keine `application.properties` im Repository gefunden. Ich habe `src/main/resources/application.yml` mit Basis-Einstellungen angelegt (App-Name, server.port=8080, logging.level.root=INFO).
+   - Pfad: `src/main/resources/application.yml`
 
 ### 3) Paketstruktur aufräumen / aus Beispiel in sinnvolle Struktur überführen
 - Ziel: Beispiel-/stub-Pakete in sinnvolle modulare Struktur überführen (z. B. `org.example.wordle` oder `org.example.app`).

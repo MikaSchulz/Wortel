@@ -1,0 +1,14 @@
+## Application configuration in YAML
+# This project previously had no application.properties; create a basic application.yml
+
+spring:
+  application:
+    name: wortel
+
+server:
+  port: 8080
+
+logging:
+  level:
+    root: INFO
+
