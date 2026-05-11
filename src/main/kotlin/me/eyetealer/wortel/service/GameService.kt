@@ -1,4 +1,4 @@
-package org.example.wordle.service
+package me.eyetealer.wortel.service
 
 import org.springframework.stereotype.Service
 

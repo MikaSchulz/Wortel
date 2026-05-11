@@ -1,7 +1,7 @@
-package org.example.wordle
+package me.eyetealer.wortel
 
-import org.example.wordle.util.IO
-import org.example.wordle.util.Main
+import me.eyetealer.wortel.util.IO
+import me.eyetealer.wortel.util.Main
 import org.springframework.boot.CommandLineRunner
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication

@@ -20,7 +20,7 @@ Wichtige Versionen
 
 Projektstruktur (wichtigste Orte)
 - `build.gradle.kts` — Buildscript (Kotlin DSL)
-- `src/main/kotlin/` — alle Produktionsquellen (Paket: `org.example.wordle`)
+- `src/main/kotlin/` — alle Produktionsquellen (Paket: `me.eyetealer.wordle`)
 - `src/main/resources/application.yml` — zentrale Konfiguration
 - `docs/` — ausführliche Migrations- und Aufgaben-Dokumente (siehe unten)
 

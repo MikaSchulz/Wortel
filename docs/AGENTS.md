@@ -1,7 +1,7 @@
 AGENTS — Projekt-Guide (Kurz)
 
 Project overview
-- Wortel: Kotlin-based Spring Boot application (package: `org.example.wordle`).
+- Wortel: Kotlin-based Spring Boot application (package: `me.eyetealer.wordle`).
 - Purpose: small Wordle-like demo app; skeleton ready to extend.
 
 Key files / layout
@@ -19,7 +19,7 @@ Build & run
 
 Guidelines
 - Use the Gradle wrapper (`./gradlew`) to ensure consistent Gradle version.
-- Follow package structure: controller / service / model / util under `org.example.wordle`.
+- Follow package structure: controller / service / model / util under `me.eyetealer.wordle`.
 - Add dependencies in `build.gradle.kts` and prefer Maven Central.
 
 Notes

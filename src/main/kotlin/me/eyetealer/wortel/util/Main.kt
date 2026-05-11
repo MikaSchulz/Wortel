@@ -1,4 +1,4 @@
-package org.example.wordle.util
+package me.eyetealer.wortel.util
 
 object Main {
     @JvmStatic

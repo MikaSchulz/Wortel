@@ -1,4 +1,4 @@
-package org.example.wordle.controller
+package me.eyetealer.wortel.controller
 
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping

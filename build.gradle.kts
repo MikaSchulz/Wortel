@@ -9,7 +9,7 @@ plugins {
     kotlin("plugin.spring") version "2.3.21"
 }
 
-group = "org.example"
+group = "me.eyetealer"
 version = "1.0-SNAPSHOT"
 
 java {
@@ -36,7 +36,8 @@ the<SourceSetContainer>().named("main") {
 
 // Explicit main class to avoid ambiguous main-class detection between Java and Kotlin
 springBoot {
-    mainClass.set("org.example.wordle.WordleApplicationKt")
+    // package is `me.eyetealer.wortel` (note the project/package name "wortel")
+    mainClass.set("me.eyetealer.wortel.WordleApplicationKt")
 }
 
 dependencies {
