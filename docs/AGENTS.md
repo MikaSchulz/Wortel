@@ -25,3 +25,4 @@ Guidelines
 Notes
 - The project uses Kotlin 2.3.21 and Spring Boot 4.0.6.
 - Java toolchain is configured for Java 25; Gradle can auto-download a matching JDK.
+
