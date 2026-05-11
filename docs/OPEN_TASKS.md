@@ -1,29 +1,104 @@
-Open Tasks (Kurz)
+Open Tasks — Single Source of Truth
 
-Status-Übersicht
-- [x] JDK 25 / Gradle toolchain konfiguriert (auto-download enabled).
-- [x] application.yml erstellt und aktiv.
-- [x] Projekt auf Kotlin migriert, Legacy Java entfernt.
-- [ ] Paketstruktur & Features erweitern (controller/service/model) — Basis angelegt.
-- [ ] CI: Build-Workflow (empfohlen).
-- [ ] Tests: Unit/Integration Tests in Kotlin ergänzen.
+Zweck
+Dieses Dokument fasst alle offenen Aufgaben, Prioritäten, den umzusetzenden Plan und den aktuellen Projektstatus zusammen. Es ersetzt die vorher separaten Dateien `docs/FEATURE_BACKLOG.md` und `docs/OPEN_TASKS.md` als zentrales Arbeitsdokument. Die alte `docs/FEATURE_BACKLOG.md` wurde auf einen Hinweis reduziert und verweist hierher.
 
-Konkrete nächste Schritte
-1) CI (High)
-   - Erstelle GitHub Actions workflow mit `./gradlew clean build`.
-2) Tests (Medium)
-   - Portiere oder schreibe Unit-Tests in `src/test/kotlin`.
-3) Compileroptions (Low)
-   - Setze Kotlin `jvmTarget = "25"` in `build.gradle.kts`.
+Kurz-Status (aktuell)
+- Build: ✅ `./gradlew clean build` — erfolgreich
+- Tests: ✅ `./gradlew test` — erfolgreich (Unit-Tests grün)
+- Code-Qualität: Spotless (textbasierte Regeln) konfiguriert in `build.gradle.kts` (Plugin `com.diffplug.spotless`)
+- Letzte Änderungen (lokal angewendet): `build.gradle.kts` (Spotless), `docs/FEATURE_BACKLOG.md` (initial), `docs/OPEN_TASKS.md` (wurde hierher gemerged)
 
-Ort der relevanten Dateien
-- Migration details: `docs/MIGRATION_SUMMARY.md`
-- Project guide: `docs/AGENTS.md`
+Master-Checkliste (Startseite)
+- [x] 1) Lokale Umgebung prüfen & Build/Tests ausführen
+- [x] 2) Code-Qualität: Linter/Formatter initial einrichten (sichere, textbasierte Spotless-Regeln)
+- [x] 3) Tests & Bugfixing: Tests ausführen und Fehler prüfen/fixen
+- [x] 4) Priorisiertes Feature-Backlog anlegen (erstes Backlog angelegt)
+- [ ] 5) CI/PR-Workflow einrichten (z. B. GitHub Actions)
+- [ ] 6) Dokumentation & API-Dokumentation (README, `application.yml`, OpenAPI)
+- [ ] 7) Release/Deployment (Docker + optional Hosting)
+- [ ] 8) Monitoring, Telemetrie, Observability (optional)
 
-Notizen zur Nachvollziehbarkeit
-- Alle wichtigen Änderungen sind im Commit history enthalten (siehe Commit in `docs/MIGRATION_SUMMARY.md`).
-- Falls ein Schritt rückgängig gemacht werden muss: nutze `git log`/`git checkout` für betroffene Dateien.
+Detaillierter Plan (Schritte & Details)
 
+1) Lokale Umgebung prüfen & Build/Tests (15–30 min)
+   - Ziel: Sicherstellen, dass das Projekt sauber baut und Tests laufen.
+   - Wichtige Dateien: `build.gradle.kts`, `src/main/resources/application.yml`, `README.md`.
+   - Empfohlene Befehle (zsh):
+     ```
+     ./gradlew clean build --no-daemon
+     ./gradlew test --no-daemon
+     ./gradlew bootRun --no-daemon
+     ```
+   - Verifikation: Health-Endpoint (z. B.) `http://localhost:8080/health`
+   - Ergebnis: Liste mit Build-/Test-Fehlern (falls vorhanden). Aktuell: Build und Tests grün.
+
+2) Code-Qualität & Abhängigkeiten (1–3 h)
+   - Tasks:
+     - Formatter/Linter: `Spotless` mit textbasierten Regeln konfiguriert. Später optional `ktlint`/`ktfmt` (abhängig von Kompatibilität).
+     - `build.gradle.kts` auf veraltete/unsichere Abhängigkeiten prüfen.
+   - Dateien: `build.gradle.kts`, ggf. `.editorconfig`, `ktlint`-Konfig.
+   - Ergebnis: PR mit Lint/Formatter-Konfiguration + evtl. Dependency-Updates.
+
+3) Tests & Bugfixing (1–8 h)
+   - Tasks:
+     - Unit- und Integrationstests ausführen; fehlende/fehlerhafte Tests priorisieren und fixen.
+     - Sicherstellen, dass Tests deterministisch laufen (keine flakiness).
+   - Dateien: `src/main/kotlin/me/eyetealer/wortel/...`, `src/test/...`.
+   - Ergebnis: Grüne Testsuite.
+
+4) Feature-Backlog aufsetzen & priorisieren (30–90 min)
+   - P0 (High) — sofortige Priorität:
+     - POST /api/v1/games — neues Spiel erstellen
+       - Rückgabe: Spiel-ID, Wortlänge, maxVersuche
+       - Tests: Unit + Integration
+     - GET /api/v1/games/{id} — Spielstatus abfragen
+       - Rückgabe: Status (running/won/lost), bisherige Versuche, verbleibende Versuche
+     - Spiele-Logik: Rate-Mechanik (correct/present/absent), Handling von doppelten Buchstaben
+
+   - P1 (Medium):
+     - Persistenz: In-Memory -> optional JPA + H2/Postgres
+     - Wortliste-Management: Lade Wortlisten aus `src/main/resources/words/`
+     - OpenAPI/Swagger (springdoc-openapi)
+
+   - P2 (Low):
+     - UI: Demo-Frontend (Thymeleaf oder React/Vite)
+     - CI/CD: GitHub Actions (build + test)
+
+5) CI / PR-Workflow (1–3 h)
+   - Empfohlen: `.github/workflows/ci.yml` mit Schritten: checkout, setup JDK (Toolchain-kompatibel), `./gradlew clean build`, `./gradlew test`, `./gradlew spotlessCheck`.
+
+6) Dokumentation & Developer Experience (30–90 min)
+   - README updaten (Run/Dev/Ports)
+   - `application.yml` Beispiel-Profile (`dev`, `prod`)
+   - API-Dokumentation (OpenAPI) bereitstellen
+
+7) Packaging & Deployment (2–6 h)
+   - Dockerfile für App + optional `docker-compose.yml` (DB)
+
+8) Observability & Production Hardening (optional)
+   - Micrometer, Prometheus, structured logging, Health/Readiness checks
+
+Konkrete, kurzfristige Aktionen (Empfohlen)
+- Sofort: CI-Workflow anlegen (GitHub Actions) — ich kann die Datei erstellen.
+- Alternativ sofort: API-Spec (OpenAPI) für P0-Endpunkte erstellen.
+- Mittelfristig: Implementiere P0-API-Endpunkte + Tests in einem Feature-Branch (`feature/api-games`).
+
+Aktuelle Änderungen im Repo (lokal vorgenommen)
+- `build.gradle.kts`: Spotless-Plugin & sichere textbasierte Regeln hinzugefügt
+- `docs/FEATURE_BACKLOG.md`: initiales Backlog (wurde hierher gemerged)
+- `docs/OPEN_TASKS.md`: dieses Dokument (konzolidiert)
+
+Hinweis / Aufräumen
+- Die separate Datei `docs/FEATURE_BACKLOG.md` wurde durch eine Verweisdatei ersetzt; alle Inhalte sind jetzt hier im zentralen Dokument.
+
+Wie du weitermachen kannst (Optionen)
+- A) Ich erstelle die GitHub Actions CI-Datei `.github/workflows/ci.yml` und mache einen PR-Branch.
+- B) Ich schreibe eine OpenAPI YAML/JSON für die P0-Endpunkte.
+- C) Ich scaffolde die P0-Implementation (Controller + Service + Unit/Integration Tests) in einem Feature-Branch.
+- D) Du editierst dieses Dokument direkt — ich übernehme Änderungen in PRs oder Branches.
+
+Wenn du möchtest, mache ich jetzt direkt A, B oder C. Sag mir, welche Option du bevorzugst.
 
 Detaillierter Plan (aus AI-Plan)
 
