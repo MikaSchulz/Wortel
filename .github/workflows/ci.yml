@@ -24,6 +24,12 @@ jobs:
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: |
             ${{ runner.os }}-gradle-
-      - name: Build
-        run: ./gradlew clean build --no-daemon
+      - name: Build and test
+        run: ./gradlew clean test integrationTest --no-daemon
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: build/test-results
 

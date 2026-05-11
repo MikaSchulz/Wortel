@@ -9,4 +9,3 @@ class HealthController {
     @GetMapping("/health")
     fun health(): ResponseEntity<String> = ResponseEntity.ok("OK")
 }
-

@@ -1,12 +1,10 @@
-import org.gradle.api.tasks.SourceSetContainer
-import java.io.File
-
 plugins {
-    id("java")
     id("org.springframework.boot") version "4.0.6"
-    id("io.spring.dependency-management") version "1.1.5"
+    id("io.spring.dependency-management") version "1.1.7"
     kotlin("jvm") version "2.3.21"
     kotlin("plugin.spring") version "2.3.21"
+    // Code formatting / linting
+    id("com.diffplug.spotless") version "6.21.0"
 }
 
 group = "me.eyetealer"
@@ -14,40 +12,74 @@ version = "1.0-SNAPSHOT"
 
 java {
     toolchain {
-        languageVersion.set(JavaLanguageVersion.of(25))
+        languageVersion = JavaLanguageVersion.of(25)
     }
 }
 
-// Note: Kotlin compiler options use the newer compilerOptions DSL in Kotlin 2.x.
-// We avoid setting deprecated kotlinOptions here to remain compatible with the
-// Kotlin 2.4.0-Beta2 plugin. If you want explicit jvmTarget/flags, we can add
-// the compilerOptions DSL (requires imports). Leave defaults for now.
+kotlin {
+    compilerOptions {
+        freeCompilerArgs.addAll("-Xjsr305=strict")
+    }
+}
 
 repositories {
     mavenCentral()
 }
 
-// Remove Java sources from the default Java sourceSet so only Kotlin sources
-// under src/main/kotlin are compiled. Legacy Java files have been moved to
-// src/legacy_java and will be ignored by the build.
-the<SourceSetContainer>().named("main") {
-    java.setSrcDirs(emptyList<File>())
+// TODO I will check this later again
+// Configure Spotless (ktlint) for code formatting checks
+spotless {
+    kotlin {
+        target("**/*.kt")
+        // Exclude test and integrationTest sources for now (these pull in test-only deps like kotlinx.coroutines)
+        targetExclude("src/integrationTest/**")
+        targetExclude("src/test/**")
+        // Use only lightweight, text-based formatting steps to avoid runtime-classpath issues
+        trimTrailingWhitespace()
+        indentWithSpaces()
+        endWithNewline()
+    }
+    kotlinGradle {
+        target("**/*.gradle.kts")
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
 }
 
-// Explicit main class to avoid ambiguous main-class detection between Java and Kotlin
+sourceSets {
+    create("integrationTest") {
+        compileClasspath += sourceSets.main.get().output
+        runtimeClasspath += sourceSets.main.get().output
+    }
+}
+
+val integrationTestImplementation by configurations.getting {
+    extendsFrom(configurations.testImplementation.get())
+}
+configurations["integrationTestRuntimeOnly"].extendsFrom(configurations.testRuntimeOnly.get())
+
 springBoot {
-    // package is `me.eyetealer.wortel` (note the project/package name "wortel")
-    mainClass.set("me.eyetealer.wortel.WordleApplicationKt")
+    mainClass = "me.eyetealer.wortel.WordleApplicationKt"
 }
 
 dependencies {
-    implementation("org.springframework.boot:spring-boot-starter-web:4.0.6")
-    implementation("org.jetbrains.kotlin:kotlin-reflect:2.3.21")
-    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.3.21")
+    implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.jetbrains.kotlin:kotlin-reflect")
 
-    testImplementation("org.springframework.boot:spring-boot-starter-test:4.0.6")
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("io.mockk:mockk:1.13.6")
+
+    "integrationTestImplementation"("org.springframework.boot:spring-boot-resttestclient")
 }
 
-tasks.test {
+tasks.withType<Test> {
     useJUnitPlatform()
+}
+
+tasks.register<Test>("integrationTest") {
+    description = "Runs integration tests."
+    group = "verification"
+    testClassesDirs = sourceSets["integrationTest"].output.classesDirs
+    classpath = sourceSets["integrationTest"].runtimeClasspath
+    shouldRunAfter(tasks.test)
 }
