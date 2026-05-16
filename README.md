@@ -12,6 +12,20 @@ cd /Users/mikaschulz/Documents/Code/Wortel/Wortel
 # open http://localhost:8080/health
 ```
 
+API & OpenAPI
+
+An initial OpenAPI specification for the planned P0 endpoints is available at `docs/openapi.yaml`.
+
+Quick curl examples (after `./gradlew bootRun`):
+
+```zsh
+# create a new game (future implementation)
+curl -s -X POST http://localhost:8080/api/v1/games -H 'Content-Type: application/json' -d '{"wordLength":5}'
+
+# get game status
+curl -s http://localhost:8080/api/v1/games/<gameId>
+```
+
 Wichtige Versionen
 - Kotlin: 2.3.21
 - Spring Boot: 4.0.6

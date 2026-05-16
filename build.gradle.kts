@@ -65,6 +65,8 @@ springBoot {
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
+    // OpenAPI / Swagger UI
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.1.0")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("io.mockk:mockk:1.13.6")

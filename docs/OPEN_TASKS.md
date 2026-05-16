@@ -14,7 +14,7 @@ Master-Checkliste (Startseite)
 - [x] 2) Code-Qualität: Linter/Formatter initial einrichten (sichere, textbasierte Spotless-Regeln)
 - [x] 3) Tests & Bugfixing: Tests ausführen und Fehler prüfen/fixen
 - [x] 4) Priorisiertes Feature-Backlog anlegen (erstes Backlog angelegt)
-- [ ] 5) CI/PR-Workflow einrichten (z. B. GitHub Actions)
+- [x] 5) CI/PR-Workflow einrichten (z. B. GitHub Actions)
 - [ ] 6) Dokumentation & API-Dokumentation (README, `application.yml`, OpenAPI)
 - [ ] 7) Release/Deployment (Docker + optional Hosting)
 - [ ] 8) Monitoring, Telemetrie, Observability (optional)

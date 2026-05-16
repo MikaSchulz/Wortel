@@ -1,0 +1,89 @@
+openapi: 3.0.3
+info:
+  title: Wortel API
+  version: "0.1.0"
+  description: Minimal OpenAPI spec for the Wortel (Wordle-like) demo app. Implements P0 endpoints.
+servers:
+  - url: http://localhost:8080
+paths:
+  /api/v1/games:
+    post:
+      summary: Create a new game
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                wordLength:
+                  type: integer
+                  description: desired length of the secret word (default: 5)
+                maxAttempts:
+                  type: integer
+                  description: maximum allowed attempts (default: 6)
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameCreated'
+        '400':
+          description: Invalid request
+  /api/v1/games/{gameId}:
+    get:
+      summary: Get game status
+      parameters:
+        - name: gameId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Game status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameStatus'
+        '404':
+          description: Not found
+components:
+  schemas:
+    GameCreated:
+      type: object
+      properties:
+        id:
+          type: string
+        wordLength:
+          type: integer
+        maxAttempts:
+          type: integer
+      required: [id, wordLength, maxAttempts]
+    GuessResult:
+      type: object
+      properties:
+        guess:
+          type: string
+        result:
+          type: array
+          items:
+            type: string
+            description: one of [correct, present, absent]
+    GameStatus:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          description: one of [new, running, won, lost]
+        attempts:
+          type: array
+          items:
+            $ref: '#/components/schemas/GuessResult'
+        remainingAttempts:
+          type: integer
+      required: [id, status, attempts, remainingAttempts]
+
