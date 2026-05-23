@@ -1,11 +1,12 @@
 // CORS helpers + standard JSON response builders.
 
-const ALLOWED_HEADERS = [
-  "authorization",
-  "x-client-info",
-  "apikey",
-  "content-type",
-].join(", ");
+// Permissive header allowlist. Safe because we don't use credentialed CORS
+// (no Access-Control-Allow-Credentials) — RLS + JWT validation in Edge
+// Functions handle authorization. Supabase clients send several headers
+// (x-region, x-client-info, x-supabase-api-version, …) plus our own
+// (x-anonymous-id), so an explicit list is brittle. `*` here matches any
+// header in the preflight Access-Control-Request-Headers list.
+const ALLOWED_HEADERS = "*";
 
 const ALLOWED_METHODS = "GET, POST, OPTIONS";
 
