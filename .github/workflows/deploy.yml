@@ -1,0 +1,117 @@
+name: Deploy to Supabase
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "supabase/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+    inputs:
+      skip_migrations:
+        description: "Skip db push (only deploy functions)"
+        required: false
+        default: "false"
+
+concurrency:
+  group: supabase-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+jobs:
+  verify:
+    name: Verify (typecheck + tests + lint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Cache Deno
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/deno
+            ~/.cache/jsr
+          key: ${{ runner.os }}-deno-${{ hashFiles('supabase/functions/deno.json') }}
+      - name: Type-check
+        working-directory: supabase/functions
+        run: deno check _shared/ games/
+      - name: Tests
+        working-directory: supabase/functions
+        run: deno test --allow-read --allow-env _shared/
+      - name: Lint
+        working-directory: supabase/functions
+        run: deno lint _shared/ games/
+
+  deploy-db:
+    name: Push DB migrations
+    needs: verify
+    if: github.event.inputs.skip_migrations != 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Link project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
+        env:
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      - name: Push migrations
+        run: supabase db push --password "$SUPABASE_DB_PASSWORD" --include-all
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+  deploy-functions:
+    name: Deploy Edge Functions
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Link project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
+        env:
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      - name: Deploy games function
+        run: supabase functions deploy games --project-ref "$SUPABASE_PROJECT_REF"
+        env:
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      - name: Set function secrets (idempotent)
+        run: |
+          supabase secrets set \
+            WORTEL_CORS_ALLOWED_ORIGINS="${WORTEL_CORS_ALLOWED_ORIGINS:-*}" \
+            --project-ref "$SUPABASE_PROJECT_REF"
+        env:
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          WORTEL_CORS_ALLOWED_ORIGINS: ${{ secrets.WORTEL_CORS_ALLOWED_ORIGINS }}
+
+  smoke-test:
+    name: Smoke test deployed endpoint
+    needs: [deploy-db, deploy-functions]
+    runs-on: ubuntu-latest
+    if: always() && needs.deploy-functions.result == 'success'
+    steps:
+      - name: POST /games (anonymous)
+        run: |
+          set -e
+          PROJECT_REF="${{ secrets.SUPABASE_PROJECT_REF }}"
+          # Falls back to legacy anon key if publishable not set yet.
+          PUBLISHABLE_KEY="${{ secrets.SUPABASE_PUBLISHABLE_KEY }}"
+          if [ -z "$PUBLISHABLE_KEY" ]; then
+            PUBLISHABLE_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
+          fi
+          RESP=$(curl -sS -X POST \
+            "https://${PROJECT_REF}.supabase.co/functions/v1/games" \
+            -H "Authorization: Bearer ${PUBLISHABLE_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{"wordLength":5,"maxAttempts":6}')
+          echo "$RESP"
+          echo "$RESP" | grep -q '"id"' || { echo "smoke test failed"; exit 1; }

@@ -1,0 +1,13 @@
+.git
+.gradle
+build
+out
+*.iml
+.idea
+.vscode
+docs
+wordlists
+README.md
+AGENTS.md
+*.md
+.github

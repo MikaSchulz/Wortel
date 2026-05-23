@@ -1,68 +1,129 @@
 openapi: 3.0.3
 info:
   title: Wortel API
-  version: "0.1.0"
-  description: Minimal OpenAPI spec for the Wortel (Wordle-like) demo app. Implements P0 endpoints.
+  version: "1.0.0"
+  description: |
+    REST API served by the Supabase Edge Function `games`.
+    Base URL: `https://<project-ref>.supabase.co/functions/v1/games`
 servers:
-  - url: http://localhost:8080
+  - url: https://<project-ref>.supabase.co/functions/v1
+    description: Supabase Edge Functions (production)
+  - url: http://127.0.0.1:54321/functions/v1
+    description: Supabase local development
+security:
+  - bearerAuth: []
+  - {}
 paths:
-  /api/v1/games:
+  /games:
     post:
       summary: Create a new game
+      description: |
+        Creates a new game. Send `Authorization: Bearer <supabase-jwt>` to bind the
+        game to a user. Without the header the game is anonymous and accessible
+        without auth afterwards.
       requestBody:
         required: false
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                wordLength:
-                  type: integer
-                  description: desired length of the secret word (default: 5)
-                maxAttempts:
-                  type: integer
-                  description: maximum allowed attempts (default: 6)
+              $ref: '#/components/schemas/CreateGameRequest'
       responses:
         '201':
           description: Created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GameCreated'
+                $ref: '#/components/schemas/CreateGameResponse'
         '400':
-          description: Invalid request
-  /api/v1/games/{gameId}:
+          description: Invalid request (unsupported wordLength, out-of-range maxAttempts)
+  /games/{gameId}:
     get:
-      summary: Get game status
+      summary: Get game state
       parameters:
         - name: gameId
           in: path
           required: true
           schema:
             type: string
+            format: uuid
       responses:
         '200':
-          description: Game status
+          description: Game state
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GameStatus'
+                $ref: '#/components/schemas/GameState'
+        '403':
+          description: JWT user does not own this game
         '404':
-          description: Not found
+          description: Game not found
+  /games/{gameId}/guesses:
+    post:
+      summary: Submit a guess
+      parameters:
+        - name: gameId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GuessRequest'
+      responses:
+        '200':
+          description: Updated game state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameState'
+        '400':
+          description: Invalid guess (wrong length, unknown word)
+        '403':
+          description: JWT user does not own this game
+        '404':
+          description: Game not found
+        '409':
+          description: Game is not running (already won or lost)
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   schemas:
-    GameCreated:
+    CreateGameRequest:
       type: object
+      properties:
+        wordLength:
+          type: integer
+          description: desired secret-word length (default 5; supported 5,6,7)
+        maxAttempts:
+          type: integer
+          description: maximum allowed attempts (default 6; range 1..20)
+    CreateGameResponse:
+      type: object
+      required: [id, wordLength, maxAttempts]
       properties:
         id:
           type: string
+          format: uuid
         wordLength:
           type: integer
         maxAttempts:
           type: integer
-      required: [id, wordLength, maxAttempts]
+    GuessRequest:
+      type: object
+      required: [guess]
+      properties:
+        guess:
+          type: string
     GuessResult:
       type: object
+      required: [guess, result]
       properties:
         guess:
           type: string
@@ -70,20 +131,28 @@ components:
           type: array
           items:
             type: string
-            description: one of [correct, present, absent]
-    GameStatus:
+            enum: [CORRECT, PRESENT, ABSENT]
+    GameState:
       type: object
+      required: [id, status, attempts, remainingAttempts, wordLength, maxAttempts]
       properties:
         id:
           type: string
+          format: uuid
         status:
           type: string
-          description: one of [new, running, won, lost]
+          enum: [RUNNING, WON, LOST]
         attempts:
           type: array
           items:
             $ref: '#/components/schemas/GuessResult'
         remainingAttempts:
           type: integer
-      required: [id, status, attempts, remainingAttempts]
-
+        wordLength:
+          type: integer
+        maxAttempts:
+          type: integer
+        secretWord:
+          type: string
+          nullable: true
+          description: revealed only when status is WON or LOST

@@ -1,0 +1,66 @@
+name: PR Preview (Supabase Branch)
+
+# Optional: requires Supabase Branching feature (Pro plan).
+# Creates a Supabase preview branch per PR, applies migrations + deploys
+# functions against it. Comments the preview URL on the PR.
+#
+# To enable: in Supabase dashboard, enable Branching, then add SUPABASE_ACCESS_TOKEN
+# + SUPABASE_PROJECT_REF secrets at repo level. Remove `if: false` below.
+
+on:
+  pull_request:
+    branches: [main, master]
+    types: [opened, synchronize, reopened, closed]
+    paths:
+      - "supabase/**"
+
+env:
+  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+jobs:
+  preview:
+    if: false # Flip to `github.event.pull_request.merged != true` to enable.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Link project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
+        env:
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      - name: Create or reuse branch
+        id: branch
+        run: |
+          BRANCH_NAME="pr-${{ github.event.pull_request.number }}"
+          if supabase branches list --project-ref "$SUPABASE_PROJECT_REF" | grep -q "$BRANCH_NAME"; then
+            echo "Branch exists, reusing."
+          else
+            supabase branches create "$BRANCH_NAME" --project-ref "$SUPABASE_PROJECT_REF"
+          fi
+          echo "branch=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
+        env:
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      - name: Push migrations + deploy function to branch
+        run: |
+          supabase db push --password "$SUPABASE_DB_PASSWORD"
+          supabase functions deploy games --project-ref "$SUPABASE_PROJECT_REF"
+        env:
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+  cleanup:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Delete preview branch
+        run: |
+          BRANCH_NAME="pr-${{ github.event.pull_request.number }}"
+          supabase branches delete "$BRANCH_NAME" \
+            --project-ref "$SUPABASE_PROJECT_REF" || true
+        env:
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}

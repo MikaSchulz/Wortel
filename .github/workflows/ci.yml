@@ -2,38 +2,51 @@ name: CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
 
 jobs:
-  build:
+  edge-functions:
+    name: Deno tests + typecheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
         with:
-          distribution: temurin
-          java-version: '25'
-      - name: Cache Gradle
+          deno-version: v2.x
+
+      - name: Cache Deno deps
         uses: actions/cache@v4
         with:
           path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+            ~/.cache/deno
+            ~/.cache/jsr
+          key: ${{ runner.os }}-deno-${{ hashFiles('supabase/functions/deno.json') }}
           restore-keys: |
-            ${{ runner.os }}-gradle-
-      - name: Build and test
-        run: ./gradlew clean test integrationTest --no-daemon
-      - name: Check formatting
-        run: ./gradlew spotlessCheck --no-daemon
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: |
-            build/test-results/**
-            build/reports/tests/test/**
+            ${{ runner.os }}-deno-
 
+      - name: Type-check
+        working-directory: supabase/functions
+        run: deno check _shared/ games/
+
+      - name: Run tests
+        working-directory: supabase/functions
+        run: deno test --allow-read --allow-env _shared/
+
+      - name: Lint
+        working-directory: supabase/functions
+        run: deno lint _shared/ games/
+
+  sql-syntax:
+    name: SQL migrations syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate migration files exist
+        run: |
+          set -e
+          ls supabase/migrations/*.sql
+          echo "OK"

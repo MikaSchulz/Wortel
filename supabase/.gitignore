@@ -1,0 +1,7 @@
+# Supabase local development artifacts
+.branches
+.temp
+.env
+
+# Bundled function output
+**/dist/
