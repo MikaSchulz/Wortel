@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.eyetealer.wortel.data.AuthRepository
+import me.eyetealer.wortel.data.ErrorMessages
 import me.eyetealer.wortel.data.GameRepository
 import me.eyetealer.wortel.data.WortelApiException
 import me.eyetealer.wortel.domain.GameStatus
@@ -24,6 +25,11 @@ data class GameUiState(
     val secretWord: String? = null,
     val loading: Boolean = false,
     val error: String? = null,
+    /**
+     * Monotonic counter — UI observes the change to fire shake animations.
+     * Increment in any path where the user's guess was rejected.
+     */
+    val shakeTrigger: Int = 0,
 )
 
 class GameViewModel(
@@ -80,8 +86,17 @@ class GameViewModel(
     fun onSubmit() {
         val current = _state.value
         if (current.gameId == null) return
-        if (current.currentGuess.length != current.wordLength) return
         if (current.status != GameStatus.RUNNING) return
+        if (current.currentGuess.length != current.wordLength) {
+            // Local validation failure — shake immediately, no server roundtrip.
+            _state.update {
+                it.copy(
+                    shakeTrigger = it.shakeTrigger + 1,
+                    error = ErrorMessages.translate("WRONG_LENGTH", "Wort zu kurz."),
+                )
+            }
+            return
+        }
         viewModelScope.launch {
             _state.update { it.copy(loading = true, error = null) }
             runCatching { games.submitGuess(current.gameId, current.currentGuess) }
@@ -99,7 +114,15 @@ class GameViewModel(
                         }
                     },
                     onFailure = { e ->
-                        _state.update { it.copy(loading = false, error = e.toMessage()) }
+                        val code = (e as? WortelApiException)?.code
+                        val shouldShake = code == "UNKNOWN_WORD" || code == "WRONG_LENGTH"
+                        _state.update {
+                            it.copy(
+                                loading = false,
+                                error = e.toMessage(),
+                                shakeTrigger = if (shouldShake) it.shakeTrigger + 1 else it.shakeTrigger,
+                            )
+                        }
                     },
                 )
         }
@@ -110,7 +133,7 @@ class GameViewModel(
     }
 
     private fun Throwable.toMessage(): String = when (this) {
-        is WortelApiException -> message ?: "Request failed"
-        else -> message ?: this::class.simpleName ?: "Unknown error"
+        is WortelApiException -> ErrorMessages.translate(code, message ?: "Anfrage fehlgeschlagen.")
+        else -> message ?: this::class.simpleName ?: "Unbekannter Fehler."
     }
 }

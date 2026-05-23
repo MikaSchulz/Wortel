@@ -54,9 +54,9 @@ class GameRepository(private val supabase: Supabase = Supabase) {
     private suspend inline fun <reified Res> decode(response: HttpResponse): Res {
         if (!response.status.isSuccess()) {
             val raw = runCatching { response.body<String>() }.getOrDefault("")
-            val msg = runCatching { json.decodeFromString<ApiError>(raw).error }
-                .getOrDefault(raw.ifEmpty { response.status.description })
-            throw WortelApiException(response.status, msg)
+            val parsed = runCatching { json.decodeFromString<ApiError>(raw) }.getOrNull()
+            val msg = parsed?.error ?: raw.ifEmpty { response.status.description }
+            throw WortelApiException(response.status, parsed?.code, msg)
         }
         return response.body()
     }
@@ -64,5 +64,6 @@ class GameRepository(private val supabase: Supabase = Supabase) {
 
 class WortelApiException(
     val status: HttpStatusCode,
+    val code: String?,
     message: String,
-) : RuntimeException("HTTP ${status.value}: $message")
+) : RuntimeException("HTTP ${status.value} [${code ?: "?"}]: $message")

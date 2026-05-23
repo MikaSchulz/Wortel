@@ -1,6 +1,6 @@
 import { DomainError, DomainErrorCode } from "../domain/shared/DomainError.ts";
 import { ConcurrencyError } from "../ports/GameRepository.ts";
-import { errorResponse } from "./cors.ts";
+import { jsonResponse } from "./cors.ts";
 
 const STATUS_BY_CODE: Record<DomainErrorCode, number> = {
   GAME_NOT_FOUND: 404,
@@ -16,18 +16,19 @@ const STATUS_BY_CODE: Record<DomainErrorCode, number> = {
 
 /**
  * Maps domain/infrastructure exceptions to HTTP responses.
- * Anything not recognised becomes a 500 with the error message echoed (safe
- * here because messages are author-written, not user input).
+ *
+ * Response body is `{ error: string, code: string }` so clients can map
+ * codes to localised messages without parsing the human-readable message.
  */
 export function mapErrorToResponse(req: Request, e: unknown): Response {
   if (e instanceof DomainError) {
     const status = STATUS_BY_CODE[e.code] ?? 500;
-    return errorResponse(req, status, e.message);
+    return jsonResponse(req, { error: e.message, code: e.code }, { status });
   }
   if (e instanceof ConcurrencyError) {
-    return errorResponse(req, 409, e.message);
+    return jsonResponse(req, { error: e.message, code: "CONCURRENCY" }, { status: 409 });
   }
   console.error("Unhandled error", e);
   const msg = e instanceof Error ? e.message : "Internal error";
-  return errorResponse(req, 500, msg);
+  return jsonResponse(req, { error: msg, code: "INTERNAL" }, { status: 500 });
 }

@@ -32,4 +32,4 @@ data class GameStateResponse(
 )
 
 @Serializable
-data class ApiError(val error: String)
+data class ApiError(val error: String, val code: String? = null)

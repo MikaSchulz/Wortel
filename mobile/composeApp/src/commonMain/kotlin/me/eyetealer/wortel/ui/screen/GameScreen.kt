@@ -76,6 +76,7 @@ fun GameScreen(
                     currentGuess = state.currentGuess,
                     wordLength = state.wordLength,
                     maxAttempts = state.maxAttempts,
+                    shakeTrigger = state.shakeTrigger,
                 )
 
                 when (state.status) {
