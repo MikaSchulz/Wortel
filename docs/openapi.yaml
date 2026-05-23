@@ -88,6 +88,46 @@ paths:
           description: Game not found
         '409':
           description: Game is not running (already won or lost)
+  /games/daily:
+    get:
+      summary: Today's daily challenge metadata
+      description: |
+        Returns metadata about today's shared daily Wordle. Does NOT reveal the secret.
+        Lazily generates today's challenge if it doesn't exist yet.
+      responses:
+        '200':
+          description: Daily metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyChallengeMeta'
+    post:
+      summary: Play today's daily challenge (idempotent)
+      description: |
+        Returns the user's daily game. If the user has not played yet today, a new
+        game is created bound to today's challenge. Subsequent calls return the
+        same game so the UI can restore state.
+
+        Anonymous play: send `X-Anonymous-Id: <client-generated-uuid>`. The same
+        UUID returns the same game on future calls. Without auth and without the
+        header, the request is rejected.
+      parameters:
+        - in: header
+          name: X-Anonymous-Id
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Required for anonymous play; ignored when JWT is present.
+      responses:
+        '200':
+          description: Daily game state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyPlay'
+        '400':
+          description: Anonymous play without X-Anonymous-Id
 components:
   securitySchemes:
     bearerAuth:
@@ -156,3 +196,26 @@ components:
           type: string
           nullable: true
           description: revealed only when status is WON or LOST
+    DailyChallengeMeta:
+      type: object
+      required: [day, wordLength, maxAttempts]
+      properties:
+        day:
+          type: string
+          format: date
+          description: ISO date in UTC (YYYY-MM-DD)
+        wordLength:
+          type: integer
+        maxAttempts:
+          type: integer
+    DailyPlay:
+      type: object
+      required: [challenge, game, alreadyPlayed]
+      properties:
+        challenge:
+          $ref: '#/components/schemas/DailyChallengeMeta'
+        game:
+          $ref: '#/components/schemas/GameState'
+        alreadyPlayed:
+          type: boolean
+          description: true if the user had already started today's daily before this call
