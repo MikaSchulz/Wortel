@@ -63,6 +63,34 @@ Expected response shape:
 | POST | `/games` | `{wordLength?:5\|6\|7, maxAttempts?:1..20}` | 201 — `{id, wordLength, maxAttempts}` |
 | GET | `/games/{id}` | — | 200 — full game state |
 | POST | `/games/{id}/guesses` | `{guess: "haben"}` | 200 — updated state |
+| GET | `/games/daily` | — | 200 — today's challenge metadata |
+| POST | `/games/daily` | — | 200 — daily game state (idempotent) |
+
+### Daily Wordle
+
+One shared secret per UTC day. Lazily generated on first request. User can play once
+per day; subsequent `POST /games/daily` calls return the same in-progress game so the
+UI can restore state. Anonymous play needs an `X-Anonymous-Id: <uuid>` header.
+
+```bash
+# Authenticated play
+curl -s -X POST "$BASE/daily" -H "Authorization: Bearer $JWT" | jq
+
+# Anonymous play
+curl -s -X POST "$BASE/daily" \
+  -H "Authorization: Bearer $PUB" \
+  -H "X-Anonymous-Id: 11111111-1111-1111-1111-111111111111" | jq
+```
+
+Response shape:
+
+```json
+{
+  "challenge": { "day": "2026-05-24", "wordLength": 5, "maxAttempts": 6 },
+  "game": { "id": "uuid", "status": "RUNNING", "attempts": [], "remainingAttempts": 6, "wordLength": 5, "maxAttempts": 6 },
+  "alreadyPlayed": false
+}
+```
 
 ## Auth modes
 
