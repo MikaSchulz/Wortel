@@ -1,0 +1,29 @@
+# Gradle
+.gradle/
+build/
+out/
+
+# Local environment
+local.properties
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# Android
+*.apk
+*.aab
+captures/
+
+# Kotlin/Native
+*.kexe
+*.klib
+
+# Xcode (when iosApp/ exists later)
+xcuserdata/
+*.xcuserstate
+DerivedData/
+Pods/

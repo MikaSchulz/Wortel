@@ -1,0 +1,45 @@
+package me.eyetealer.wortel
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.viewmodel.compose.viewModel
+import me.eyetealer.wortel.ui.screen.GameScreen
+import me.eyetealer.wortel.ui.screen.HomeScreen
+import me.eyetealer.wortel.ui.theme.WortelTheme
+import me.eyetealer.wortel.viewmodel.GameViewModel
+
+@Composable
+fun App() {
+    WortelTheme {
+        val vm: GameViewModel = viewModel { GameViewModel() }
+        val state by vm.state.collectAsState()
+
+        var screen by remember { mutableStateOf<Screen>(Screen.Home) }
+
+        when (val s = screen) {
+            Screen.Home -> HomeScreen(
+                onStart = { wordLength ->
+                    vm.startNewGame(wordLength = wordLength)
+                    screen = Screen.Game
+                },
+            )
+            Screen.Game -> GameScreen(
+                state = state,
+                onLetter = vm::onLetter,
+                onBackspace = vm::onBackspace,
+                onSubmit = vm::onSubmit,
+                onNewGame = { screen = Screen.Home },
+                onClearError = vm::clearError,
+            )
+        }
+    }
+}
+
+private sealed interface Screen {
+    data object Home : Screen
+    data object Game : Screen
+}
