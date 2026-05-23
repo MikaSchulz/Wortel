@@ -171,6 +171,25 @@ curl -X POST https://<project-ref>.supabase.co/functions/v1/games \
 
 ## Maintenance: regenerate wordlists
 
-`wordlists/wordlist_creator.py` (kept in the repo root) downloads the German FrequencyWords
-list, filters, and writes `words_{5,6,7}_letters.txt`. After regenerating, copy the files
-into `supabase/functions/_shared/data/` and redeploy.
+`wordlists/wordlist_creator.py` downloads the German FrequencyWords list, filters, and writes
+`words_{5,6,7}_letters.txt`. Edge Functions need them as **TS modules** (not txt) so the bundler
+ships them with the function.
+
+After regenerating txt files, convert to ts:
+
+```bash
+cd supabase/functions/_shared/infrastructure/data
+for L in 5 6 7; do
+  python3 -c "
+with open('words_${L}_letters.txt') as f:
+    words = [w.strip() for w in f if w.strip()]
+with open('words_${L}_letters.ts', 'w') as out:
+    out.write('// Auto-generated. Do not edit by hand.\n\n')
+    out.write('export const WORDS_${L}: readonly string[] = [\n')
+    for w in words: out.write(f'  \"{w}\",\n')
+    out.write('];\n')
+"
+done
+```
+
+Then redeploy: `supabase functions deploy games` (or push to main and let Actions run).

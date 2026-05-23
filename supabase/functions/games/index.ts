@@ -28,7 +28,7 @@ import {
   parseGuessBody,
   readJson,
 } from "../_shared/http/validation.ts";
-import { FileWordRepository } from "../_shared/infrastructure/FileWordRepository.ts";
+import { BundledWordRepository } from "../_shared/infrastructure/BundledWordRepository.ts";
 import { SupabaseGameRepository } from "../_shared/infrastructure/SupabaseGameRepository.ts";
 import { serviceClient } from "../_shared/infrastructure/supabaseClient.ts";
 
@@ -38,7 +38,7 @@ let wired: { create: CreateGame; get: GetGame; guess: SubmitGuess } | null = nul
 function useCases() {
   if (wired) return wired;
   const games = new SupabaseGameRepository(serviceClient());
-  const words = new FileWordRepository();
+  const words = new BundledWordRepository();
   wired = {
     create: new CreateGame(games, words),
     get: new GetGame(games),
