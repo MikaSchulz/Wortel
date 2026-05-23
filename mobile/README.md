@@ -10,6 +10,18 @@ Kotlin Multiplatform + Compose Multiplatform app. Android + iOS share **all** UI
 - **Supabase Kotlin SDK** 3.x — auth + functions
 - **AGP** 8.7.3, **min SDK** 26 (Android 8), **target SDK** 35
 
+## Targets
+
+Same `commonMain` UI ships to **three platforms**:
+
+| Target | Source set | How to build | Output |
+| --- | --- | --- | --- |
+| Android | `androidMain` | `./gradlew :composeApp:assembleDebug` | APK |
+| iOS | `iosMain` | Xcode project (Mac required) | `.app` |
+| Web | `wasmJsMain` | `./gradlew :composeApp:wasmJsBrowserDistribution` | HTML + JS + WASM |
+
+Plus a `desktop` JVM target for running headless tests on CI.
+
 ## Directory layout
 
 ```
@@ -17,13 +29,14 @@ mobile/
 ├── composeApp/
 │   └── src/
 │       ├── commonMain/kotlin/me/eyetealer/wortel/
-│       │   ├── App.kt                       # root composable + nav
+│       │   ├── App.kt                       # root composable + nav (shared)
 │       │   ├── domain/                      # ported from backend (Game, evaluate, …)
 │       │   ├── data/                        # SupabaseClient, GameRepository, DTOs
 │       │   ├── viewmodel/GameViewModel.kt   # StateFlow<GameUiState>
 │       │   └── ui/                          # theme, screens, components
 │       ├── androidMain/                     # MainActivity, AndroidManifest.xml
-│       ├── iosMain/                         # MainViewController (Compose UIViewController)
+│       ├── iosMain/                         # MainViewController
+│       ├── wasmJsMain/                      # main.kt (ComposeViewport) + index.html
 │       └── commonTest/                      # shared unit tests
 ├── build.gradle.kts
 ├── settings.gradle.kts
@@ -52,18 +65,40 @@ mobile/
 ```bash
 cd mobile
 
-# Android debug APK
+# Android debug APK → composeApp/build/outputs/apk/debug/composeApp-debug.apk
 ./gradlew :composeApp:assembleDebug
 
 # Install on connected device/emulator
 ./gradlew :composeApp:installDebug
 
-# Unit tests (commonMain)
-./gradlew :composeApp:testDebugUnitTest
+# Web bundle → composeApp/build/dist/wasmJs/productionExecutable/
+./gradlew :composeApp:wasmJsBrowserDistribution
+
+# Web dev server with hot reload (http://localhost:8080)
+./gradlew :composeApp:wasmJsBrowserDevelopmentRun --continuous
+
+# Unit tests (JVM target, no Android SDK needed)
+./gradlew :composeApp:desktopTest
 
 # Lint
 ./gradlew lint
 ```
+
+## Web target details
+
+The web build produces ~13 MB of static files (gzipped to ~3-4 MB over the
+wire). First page load downloads:
+
+- `index.html` (1.7 KB)
+- `composeApp.js` (555 KB) — JS shim + Kotlin/Wasm interop
+- `037f170986f544477491.wasm` (8 MB) — Kotlin/Skia/Compose runtime
+- `59fb4b1abfed24a877ff.wasm` (2.8 MB) — Skia native renderer
+
+Subsequent navigations are instant (SPA). Deployment via GitHub Actions
+to GitHub Pages on every push to `main` — see `.github/workflows/web-deploy.yml`.
+
+Live URL: `https://<your-gh-username>.github.io/Wortel/` (enable Pages in repo
+Settings → Pages → Source: GitHub Actions).
 
 ## Live backend
 

@@ -1,0 +1,75 @@
+name: Web deploy
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/web-deploy.yml"
+  workflow_dispatch:
+
+# Allow one concurrent deployment.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    name: Build wasmJs distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            mobile/.gradle
+          key: ${{ runner.os }}-gradle-web-${{ hashFiles('mobile/**/*.gradle*', 'mobile/gradle/**', 'mobile/gradle.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-web-
+
+      - name: Cache Kotlin/Wasm + Node toolchain
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/nodejs
+            ~/.gradle/yarn
+            mobile/build/js
+            mobile/composeApp/build/js
+          key: ${{ runner.os }}-kotlin-wasm-${{ hashFiles('mobile/gradle/libs.versions.toml') }}
+
+      - name: Build wasmJs distribution
+        working-directory: mobile
+        run: ./gradlew :composeApp:wasmJsBrowserDistribution --no-daemon --stacktrace
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: mobile/composeApp/build/dist/wasmJs/productionExecutable
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

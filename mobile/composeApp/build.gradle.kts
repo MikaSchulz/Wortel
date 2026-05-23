@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
+import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -17,7 +18,7 @@ kotlin {
         }
     }
 
-    // Pure JVM target — lets us run commonMain tests on machines without an
+    // Pure JVM target — runs commonMain tests on machines without an
     // Android SDK (CI, SSH dev box). Not shipped as a runnable artifact.
     jvm("desktop") {
         @OptIn(ExperimentalKotlinGradlePluginApi::class)
@@ -35,6 +36,21 @@ kotlin {
             baseName = "ComposeApp"
             isStatic = true
         }
+    }
+
+    // Web target — Compose Multiplatform on Kotlin/Wasm. Renders the same
+    // commonMain UI in the browser via WebAssembly + Skia. Produces static
+    // files (HTML + JS + .wasm) deployable to GitHub Pages, Cloudflare Pages,
+    // Supabase Storage, etc.
+    @OptIn(ExperimentalWasmDsl::class)
+    wasmJs {
+        moduleName = "composeApp"
+        browser {
+            commonWebpackConfig {
+                outputFileName = "composeApp.js"
+            }
+        }
+        binaries.executable()
     }
 
     sourceSets {
@@ -73,6 +89,14 @@ kotlin {
 
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
+        }
+
+        // wasmJs (browser) — uses the JS Ktor engine which doubles as the
+        // wasmJs engine in Ktor 3.
+        val wasmJsMain by getting {
+            dependencies {
+                implementation(libs.ktor.client.js)
+            }
         }
     }
 }
