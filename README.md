@@ -3,6 +3,8 @@ Wortel — README
 
 Wortle-Backend auf Supabase (Postgres + Auth + Edge Functions in Deno/TypeScript).
 
+**Live:** `https://lmmjbpgfnuxbcdvjtdkm.supabase.co/functions/v1/games` — siehe [`docs/SHOWCASE.md`](docs/SHOWCASE.md) für curl-Beispiele.
+
 ## Stack
 
 - **Supabase Postgres** — Spielzustand (`public.games`) mit Row Level Security

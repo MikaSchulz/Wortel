@@ -6,7 +6,7 @@ info:
     REST API served by the Supabase Edge Function `games`.
     Base URL: `https://<project-ref>.supabase.co/functions/v1/games`
 servers:
-  - url: https://<project-ref>.supabase.co/functions/v1
+  - url: https://lmmjbpgfnuxbcdvjtdkm.supabase.co/functions/v1
     description: Supabase Edge Functions (production)
   - url: http://127.0.0.1:54321/functions/v1
     description: Supabase local development
