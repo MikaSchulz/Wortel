@@ -56,7 +56,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.101.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Link project
         run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
         env:
@@ -75,7 +77,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.101.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Link project
         run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
         env:
