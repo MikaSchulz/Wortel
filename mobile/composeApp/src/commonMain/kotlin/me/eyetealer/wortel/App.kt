@@ -49,7 +49,10 @@ fun App() {
                 },
                 hasSavedGame = state.hasSavedGame,
                 onResume = {
-                    intentToStartGame = true
+                    // Don't set intentToStartGame — vm.resumeSavedGame()
+                    // flips initializing=true synchronously so the Splash
+                    // shows until the GET response hydrates a complete
+                    // Game state. No half-loaded board in between.
                     vm.resumeSavedGame()
                 },
             )

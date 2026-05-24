@@ -107,23 +107,22 @@ class GameViewModel(
             _state.value = GameUiState(initializing = false)
             return
         }
-        viewModelScope.launch { performRestore(savedId, fromSplash = true) }
+        viewModelScope.launch { performRestore(savedId) }
     }
 
     /**
      * User-triggered restore from the Home screen's "Spiel fortfahren"
-     * button. Same logic as the auto-restore, but always exits Splash
-     * (we may already be on Home with the saved id known).
+     * button. Sets `initializing = true` synchronously so the App routes
+     * to the splash screen while the hydration request is in flight —
+     * the user never sees a half-loaded Game screen.
      */
     fun resumeSavedGame() {
         val saved = _state.value.savedGameId ?: return
-        viewModelScope.launch { performRestore(saved, fromSplash = false) }
+        _state.update { it.copy(initializing = true) }
+        viewModelScope.launch { performRestore(saved) }
     }
 
-    private suspend fun performRestore(id: String, fromSplash: Boolean) {
-        if (!fromSplash) {
-            _state.update { it.copy(loading = true) }
-        }
+    private suspend fun performRestore(id: String) {
         runCatching {
             // ensureSignedIn also waits for Supabase auth to finish
             // restoring a persisted session — otherwise the GET fires
