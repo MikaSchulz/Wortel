@@ -79,6 +79,10 @@ class GameViewModel(
         viewModelScope.launch {
             _state.update { it.copy(loading = true) }
             runCatching {
+                // ensureSignedIn now also waits for Supabase auth to finish
+                // restoring a persisted session — otherwise the GET fires
+                // before currentSessionOrNull is populated and the server
+                // rejects with 403 because it sees no user_id.
                 auth.ensureSignedIn()
                 games.get(savedId)
             }.fold(

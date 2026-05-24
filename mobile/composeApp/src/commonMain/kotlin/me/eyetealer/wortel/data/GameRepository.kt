@@ -2,6 +2,7 @@ package me.eyetealer.wortel.data
 
 import io.github.jan.supabase.auth.auth
 import io.ktor.client.HttpClient
+import kotlinx.coroutines.flow.first
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.header
@@ -51,6 +52,12 @@ class GameRepository(private val supabase: Supabase = Supabase) {
         path: String,
         body: Req?,
     ): Res {
+        // Belt-and-braces: even if the caller didn't await auth init,
+        // make sure we don't fire off a request with just the publishable
+        // key while a real session is still loading from storage.
+        supabase.client.auth.sessionStatus.first {
+            it !is io.github.jan.supabase.auth.status.SessionStatus.Initializing
+        }
         val token = supabase.client.auth.currentSessionOrNull()?.accessToken
             ?: SupabaseConfig.PUBLISHABLE_KEY
 
