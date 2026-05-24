@@ -1,6 +1,9 @@
 package me.eyetealer.wortel.ui.component
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -30,6 +33,9 @@ import me.eyetealer.wortel.ui.theme.WortelColors
 
 private const val FLIP_HALF_MS = 250
 private const val FLIP_PEAK_ANGLE = 90f
+
+private const val PULSE_MAX_SCALE = 1.06f
+private const val PULSE_HALF_MS = 700
 
 @Composable
 fun Tile(
@@ -74,6 +80,24 @@ fun Tile(
         rotation.animateTo(0f, animationSpec = tween(FLIP_HALF_MS))
     }
 
+    // Pulse the selected (cursor) tile so the focus position stays obvious
+    // even without colour changes. Scale is applied via graphicsLayer so it
+    // doesn't cause re-layout of the row.
+    val pulse = remember { Animatable(1f) }
+    LaunchedEffect(selected) {
+        if (selected) {
+            pulse.animateTo(
+                targetValue = PULSE_MAX_SCALE,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = PULSE_HALF_MS, easing = FastOutSlowInEasing),
+                    repeatMode = RepeatMode.Reverse,
+                ),
+            )
+        } else {
+            pulse.snapTo(1f)
+        }
+    }
+
     val background = when (displayedResult) {
         LetterResult.CORRECT -> WortelColors.correct
         LetterResult.PRESENT -> WortelColors.present
@@ -104,6 +128,8 @@ fun Tile(
             .size(56.dp)
             .graphicsLayer {
                 rotationX = rotation.value
+                scaleX = pulse.value
+                scaleY = pulse.value
                 // Distance large enough that the perspective at 90° still
                 // looks like a card edge, not a violent zoom.
                 cameraDistance = 12f * density
