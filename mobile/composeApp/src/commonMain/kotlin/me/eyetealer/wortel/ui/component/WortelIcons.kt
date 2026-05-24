@@ -1,0 +1,81 @@
+package me.eyetealer.wortel.ui.component
+
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+
+/**
+ * Hand-drawn vector icons.
+ *
+ * Compose Multiplatform's wasmJs target uses a bundled Skia font that is
+ * missing several Unicode symbol glyphs (e.g. `←` U+2190 renders empty,
+ * `⌫` U+232B too). Rather than ship a Noto Symbols font (~200 KB) or pull
+ * the material-icons-extended artifact (heavier still and version-fragile
+ * across CMP releases), draw the few icons we need with Canvas primitives.
+ *
+ * Each icon respects `LocalContentColor` so it inherits the surrounding
+ * Material 3 theme — Tile/Key text and icon colour stay consistent.
+ */
+object WortelIcons {
+
+    @Composable
+    fun ArrowLeft(size: Dp = 24.dp, modifier: Modifier = Modifier) {
+        val color = LocalContentColor.current
+        Canvas(modifier.size(size)) {
+            val w = this.size.width
+            val h = this.size.height
+            val stroke = w * 0.10f
+            val tipX = w * 0.22f
+            val endX = w * 0.85f
+            val midY = h / 2f
+            val barb = w * 0.20f
+            drawLine(color, Offset(tipX, midY), Offset(endX, midY), stroke, StrokeCap.Round)
+            drawLine(color, Offset(tipX, midY), Offset(tipX + barb, midY - barb), stroke, StrokeCap.Round)
+            drawLine(color, Offset(tipX, midY), Offset(tipX + barb, midY + barb), stroke, StrokeCap.Round)
+        }
+    }
+
+    @Composable
+    fun Backspace(size: Dp = 24.dp, modifier: Modifier = Modifier) {
+        val color = LocalContentColor.current
+        Canvas(modifier.size(size)) {
+            val w = this.size.width
+            val h = this.size.height
+            val stroke = w * 0.09f
+            // Pentagon body: tip on the left, rectangle on the right.
+            val tipX = w * 0.12f
+            val midY = h / 2f
+            val leftX = w * 0.40f
+            val rightX = w * 0.90f
+            val topY = h * 0.22f
+            val botY = h * 0.78f
+            val path = Path().apply {
+                moveTo(tipX, midY)
+                lineTo(leftX, topY)
+                lineTo(rightX, topY)
+                lineTo(rightX, botY)
+                lineTo(leftX, botY)
+                close()
+            }
+            drawPath(path, color, style = Stroke(width = stroke))
+            // Small "X" inside to denote delete.
+            val pad = w * 0.10f
+            val xLeft = leftX + pad
+            val xRight = rightX - pad
+            val xTop = topY + pad
+            val xBot = botY - pad
+            val xStroke = stroke * 0.75f
+            drawLine(color, Offset(xLeft, xTop), Offset(xRight, xBot), xStroke, StrokeCap.Round)
+            drawLine(color, Offset(xRight, xTop), Offset(xLeft, xBot), xStroke, StrokeCap.Round)
+        }
+    }
+}

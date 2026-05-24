@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.sp
 import me.eyetealer.wortel.domain.GameStatus
 import me.eyetealer.wortel.ui.component.Board
 import me.eyetealer.wortel.ui.component.Keyboard
+import me.eyetealer.wortel.ui.component.WortelIcons
 import me.eyetealer.wortel.viewmodel.GameUiState
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -39,14 +40,7 @@ fun GameScreen(
             TopAppBar(
                 navigationIcon = {
                     IconButton(onClick = onNewGame) {
-                        // Unicode arrow keeps us off the material-icons artifact
-                        // (which isn't published for Compose Multiplatform 1.8
-                        // in the same form). 24sp matches stock Material navigation icons.
-                        Text(
-                            text = "←",
-                            fontSize = 24.sp,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
+                        WortelIcons.ArrowLeft()
                     }
                 },
                 title = { Text("Wortel") },

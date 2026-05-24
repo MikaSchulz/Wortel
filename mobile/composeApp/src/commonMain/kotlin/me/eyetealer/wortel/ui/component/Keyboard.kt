@@ -48,9 +48,18 @@ fun Keyboard(
         KeyRow(ROW_1, letterStates, onLetter)
         KeyRow(ROW_2, letterStates, onLetter)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            ActionKey("ENTER", onEnter, width = 64.dp)
+            ActionKey(onEnter, width = 64.dp) {
+                Text(
+                    text = "ENTER",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
             ROW_3.forEach { ch -> LetterKey(ch, letterStates[ch], onLetter) }
-            ActionKey("⌫", onBackspace, width = 48.dp)
+            ActionKey(onBackspace, width = 48.dp) {
+                WortelIcons.Backspace(size = 22.dp)
+            }
         }
     }
 }
@@ -98,7 +107,11 @@ private fun LetterKey(
 }
 
 @Composable
-private fun ActionKey(label: String, onClick: () -> Unit, width: Dp) {
+private fun ActionKey(
+    onClick: () -> Unit,
+    width: Dp,
+    content: @Composable () -> Unit,
+) {
     Box(
         modifier = Modifier
             .width(width)
@@ -108,12 +121,7 @@ private fun ActionKey(label: String, onClick: () -> Unit, width: Dp) {
             .clickable { onClick() },
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = label,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-        )
+        content()
     }
 }
 
