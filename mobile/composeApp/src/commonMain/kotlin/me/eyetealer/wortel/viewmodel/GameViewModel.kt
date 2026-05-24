@@ -153,11 +153,26 @@ class GameViewModel(
                     )
                 }
             },
-            onFailure = {
-                // 403 / 404 / network — drop the stale pointer and fall
-                // through to a clean Home screen.
-                storage.saveGameId(null)
-                _state.value = GameUiState(initializing = false)
+            onFailure = { e ->
+                // Distinguish:
+                //   - Server explicitly says "you can't have this" (403/404)
+                //     → clear the saved pointer, the game is unreachable.
+                //   - Anything else (network, timeout, 5xx)
+                //     → keep the savedGameId so a retry can still find it;
+                //       surface an error message instead.
+                val code = (e as? WortelApiException)?.code
+                val isStale = code == "FORBIDDEN" || code == "GAME_NOT_FOUND"
+                if (isStale) {
+                    storage.saveGameId(null)
+                    _state.value = GameUiState(initializing = false)
+                } else {
+                    val saved = _state.value.savedGameId ?: id
+                    _state.value = GameUiState(
+                        initializing = false,
+                        savedGameId = saved,
+                        error = e.toMessage(),
+                    )
+                }
             },
         )
     }
@@ -327,18 +342,21 @@ class GameViewModel(
                     onFailure = { e ->
                         val code = (e as? WortelApiException)?.code
                         val gameStale = code == "FORBIDDEN" || code == "GAME_NOT_FOUND"
-                        if (gameStale) storage.saveGameId(null)
-                        _state.update {
-                            if (gameStale) {
-                                // Local gameId no longer valid (e.g. session changed
-                                // since the game was created). Drop the state so the
-                                // UI bounces back to "no game in progress".
+                        if (gameStale) {
+                            // Server says we can't access this game — drop
+                            // both the in-memory state and the persisted id.
+                            storage.saveGameId(null)
+                            _state.update {
                                 GameUiState(
                                     initializing = false,
-                                    error = e.toMessage() +
-                                        " Bitte neues Spiel starten.",
+                                    error = e.toMessage() + " Bitte neues Spiel starten.",
                                 )
-                            } else {
+                            }
+                        } else {
+                            // Network / timeout / 5xx — keep game state and
+                            // savedGameId intact so the user can retry the
+                            // submit (or just keep playing if it was flaky).
+                            _state.update {
                                 it.copy(
                                     loading = false,
                                     error = e.toMessage(),
