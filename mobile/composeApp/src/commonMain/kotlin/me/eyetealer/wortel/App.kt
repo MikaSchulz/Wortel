@@ -21,22 +21,19 @@ fun App() {
         val state by vm.state.collectAsState()
 
         // Optimistic flag flipped synchronously when the user clicks "Neues
-        // Spiel" so the Game screen renders immediately instead of waiting
-        // a frame for state.gameId to arrive from POST /games. Cleared when
-        // gameId arrives (success) or when state is reset.
+        // Spiel" or "Spiel fortfahren" so the Game screen renders immediately
+        // instead of waiting a frame for state.gameId to arrive from the
+        // network call. Cleared when gameId arrives or when goHome runs.
         var intentToStartGame by remember { mutableStateOf(false) }
 
         LaunchedEffect(Unit) {
             vm.tryRestoreOnce()
         }
 
-        // Drop the intent flag once the game actually materialises.
         LaunchedEffect(state.gameId) {
             if (state.gameId != null) intentToStartGame = false
         }
 
-        // Screen is derived from state in the same composition pass — no
-        // LaunchedEffect-driven lag means no Home flash during restore.
         val screen: Screen = when {
             state.initializing -> Screen.Splash
             state.gameId != null || intentToStartGame -> Screen.Game
@@ -47,10 +44,13 @@ fun App() {
             Screen.Splash -> SplashScreen()
             Screen.Home -> HomeScreen(
                 onStart = { wordLength ->
-                    // Set the intent BEFORE kicking off the network call so
-                    // the Game screen takes over on the very next render.
                     intentToStartGame = true
                     vm.startNewGame(wordLength = wordLength)
+                },
+                hasSavedGame = state.hasSavedGame,
+                onResume = {
+                    intentToStartGame = true
+                    vm.resumeSavedGame()
                 },
             )
             Screen.Game -> GameScreen(
@@ -59,8 +59,10 @@ fun App() {
                 onBackspace = vm::onBackspace,
                 onSubmit = vm::onSubmit,
                 onNewGame = {
+                    // Back arrow: leave the game screen but KEEP the saved
+                    // game so the Home screen offers "Spiel fortfahren".
                     intentToStartGame = false
-                    vm.reset()
+                    vm.goHome()
                 },
                 onTileClick = vm::onTileClick,
                 onClearError = vm::clearError,

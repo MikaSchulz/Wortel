@@ -2,10 +2,13 @@ package me.eyetealer.wortel.ui.screen
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,7 +23,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun HomeScreen(onStart: (wordLength: Int) -> Unit) {
+fun HomeScreen(
+    onStart: (wordLength: Int) -> Unit,
+    hasSavedGame: Boolean = false,
+    onResume: () -> Unit = {},
+) {
     var wordLength by remember { mutableStateOf(5) }
 
     Scaffold { padding ->
@@ -44,22 +51,28 @@ fun HomeScreen(onStart: (wordLength: Int) -> Unit) {
                 fontSize = 16.sp,
             )
 
+            if (hasSavedGame) {
+                // Resume takes the primary slot — the player just came from
+                // it, they almost certainly want to keep playing.
+                Button(onClick = onResume) {
+                    Text("Spiel fortfahren", fontSize = 16.sp)
+                }
+            }
+
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text("Wortlänge:", fontSize = 14.sp)
-                androidx.compose.foundation.layout.Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(5, 6, 7).forEach { len ->
                         val selected = len == wordLength
                         Button(
                             onClick = { wordLength = len },
                             colors = if (selected) {
-                                androidx.compose.material3.ButtonDefaults.buttonColors()
+                                ButtonDefaults.buttonColors()
                             } else {
-                                androidx.compose.material3.ButtonDefaults.outlinedButtonColors()
+                                ButtonDefaults.outlinedButtonColors()
                             },
                         ) {
                             Text("$len")
@@ -68,8 +81,17 @@ fun HomeScreen(onStart: (wordLength: Int) -> Unit) {
                 }
             }
 
-            Button(onClick = { onStart(wordLength) }) {
-                Text("Neues Spiel", fontSize = 16.sp)
+            // When there's a saved game we still want to allow starting a
+            // new one, but mark it as the secondary action so the user
+            // doesn't lose their in-progress game by accident.
+            if (hasSavedGame) {
+                OutlinedButton(onClick = { onStart(wordLength) }) {
+                    Text("Neues Spiel", fontSize = 16.sp)
+                }
+            } else {
+                Button(onClick = { onStart(wordLength) }) {
+                    Text("Neues Spiel", fontSize = 16.sp)
+                }
             }
         }
     }

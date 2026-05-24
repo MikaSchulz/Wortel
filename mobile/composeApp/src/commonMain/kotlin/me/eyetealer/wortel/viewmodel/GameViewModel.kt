@@ -24,6 +24,22 @@ data class GameUiState(
      * restored game.
      */
     val initializing: Boolean = true,
+    /**
+     * Persisted game UUID that survives a navigate-home click. Drives the
+     * "Spiel fortfahren" affordance on the Home screen. Cleared when:
+     *   - the saved game finishes (WON / LOST)
+     *   - the saved game is no longer accessible (stale 403 / 404)
+     *   - the user explicitly starts a new game (overwritten by new id)
+     *
+     * Stays set while [gameId] is null after a back-click, so the user can
+     * return to the same game from Home without losing progress.
+     */
+    val savedGameId: String? = null,
+    /**
+     * UUID of the game currently being interacted with. Non-null implies
+     * the Game screen is active. Cleared by goHome / reset / terminal-error
+     * paths — note that clearing this is *independent* of savedGameId.
+     */
     val gameId: String? = null,
     val wordLength: Int = 5,
     val maxAttempts: Int = 6,
@@ -60,6 +76,9 @@ data class GameUiState(
     /** True once every slot has a character. */
     val isCurrentGuessComplete: Boolean
         get() = currentGuessChars.size == wordLength && currentGuessChars.all { it != null }
+
+    /** Convenience for the Home screen — show the "Fortfahren" button. */
+    val hasSavedGame: Boolean get() = savedGameId != null
 }
 
 class GameViewModel(
@@ -88,52 +107,68 @@ class GameViewModel(
             _state.value = GameUiState(initializing = false)
             return
         }
-        viewModelScope.launch {
-            // Stay on initializing=true while we ask the server. The user
-            // sees a splash, not Home, until we know where to send them.
-            runCatching {
-                // ensureSignedIn also waits for Supabase auth to finish
-                // restoring a persisted session — otherwise the GET fires
-                // before currentSessionOrNull is populated and the server
-                // rejects with 403 because it sees no user_id.
-                auth.ensureSignedIn()
-                games.get(savedId)
-            }.fold(
-                onSuccess = { resp ->
-                    if (resp.status.isTerminal()) {
-                        // Finished game — don't restore the user into a dead state.
-                        storage.saveGameId(null)
-                        _state.value = GameUiState(initializing = false)
-                    } else {
-                        _state.value = GameUiState(
-                            initializing = false,
-                            gameId = resp.id,
-                            wordLength = resp.wordLength,
-                            maxAttempts = resp.maxAttempts,
-                            attempts = resp.attempts,
-                            status = resp.status,
-                            remainingAttempts = resp.remainingAttempts,
-                            secretWord = resp.secretWord,
-                            currentGuessChars = List(resp.wordLength) { null },
-                            cursorIndex = 0,
-                            loading = false,
-                        )
-                    }
-                },
-                onFailure = {
-                    // 403 / 404 / network — drop the stale pointer and fall
-                    // through to a clean Home screen.
+        viewModelScope.launch { performRestore(savedId, fromSplash = true) }
+    }
+
+    /**
+     * User-triggered restore from the Home screen's "Spiel fortfahren"
+     * button. Same logic as the auto-restore, but always exits Splash
+     * (we may already be on Home with the saved id known).
+     */
+    fun resumeSavedGame() {
+        val saved = _state.value.savedGameId ?: return
+        viewModelScope.launch { performRestore(saved, fromSplash = false) }
+    }
+
+    private suspend fun performRestore(id: String, fromSplash: Boolean) {
+        if (!fromSplash) {
+            _state.update { it.copy(loading = true) }
+        }
+        runCatching {
+            // ensureSignedIn also waits for Supabase auth to finish
+            // restoring a persisted session — otherwise the GET fires
+            // before currentSessionOrNull is populated and the server
+            // rejects with 403 because it sees no user_id.
+            auth.ensureSignedIn()
+            games.get(id)
+        }.fold(
+            onSuccess = { resp ->
+                if (resp.status.isTerminal()) {
+                    // Finished game — don't restore the user into a dead state.
                     storage.saveGameId(null)
                     _state.value = GameUiState(initializing = false)
-                },
-            )
-        }
+                } else {
+                    _state.value = GameUiState(
+                        initializing = false,
+                        savedGameId = resp.id,
+                        gameId = resp.id,
+                        wordLength = resp.wordLength,
+                        maxAttempts = resp.maxAttempts,
+                        attempts = resp.attempts,
+                        status = resp.status,
+                        remainingAttempts = resp.remainingAttempts,
+                        secretWord = resp.secretWord,
+                        currentGuessChars = List(resp.wordLength) { null },
+                        cursorIndex = 0,
+                        loading = false,
+                    )
+                }
+            },
+            onFailure = {
+                // 403 / 404 / network — drop the stale pointer and fall
+                // through to a clean Home screen.
+                storage.saveGameId(null)
+                _state.value = GameUiState(initializing = false)
+            },
+        )
     }
 
     fun startNewGame(wordLength: Int = 5, maxAttempts: Int = 6) {
         // Reset visible state immediately so any previous game's tiles /
         // attempts / current guess disappear before the network call. Without
         // this the user briefly sees the old board while we wait for POST /games.
+        // Starting a new game discards any previously saved game.
+        storage.saveGameId(null)
         _state.value = GameUiState(
             initializing = false,
             wordLength = wordLength,
@@ -157,6 +192,7 @@ class GameViewModel(
                     storage.saveGameId(resp.id)
                     _state.value = GameUiState(
                         initializing = false,
+                        savedGameId = resp.id,
                         gameId = resp.id,
                         wordLength = resp.wordLength,
                         maxAttempts = resp.maxAttempts,
@@ -174,17 +210,16 @@ class GameViewModel(
     }
 
     /**
-     * Clears all in-memory game state. Called when the user navigates away
-     * (back button or "Neu"), so the next visit to the game screen never
-     * flashes the previous game's tiles before the new game loads. Also
-     * drops the persisted gameId so a reload doesn't re-enter the game
-     * the user just left.
+     * Navigate away from the active game without discarding the saved
+     * pointer. After this, the Home screen will offer "Spiel fortfahren"
+     * to bring the user back in via [resumeSavedGame].
      */
-    fun reset() {
-        storage.saveGameId(null)
-        // initializing=false so the splash doesn't re-appear after the user
-        // intentionally navigated away from the game.
-        _state.value = GameUiState(initializing = false)
+    fun goHome() {
+        val saved = _state.value.savedGameId
+        _state.value = GameUiState(
+            initializing = false,
+            savedGameId = saved,
+        )
     }
 
     fun onLetter(letter: Char) {
@@ -269,10 +304,11 @@ class GameViewModel(
                                 )
                             }
                         } else {
-                            if (resp.status.isTerminal()) {
-                                // Game ended this turn — drop the persisted id
-                                // so a reload doesn't try to restore a finished
-                                // game (and then immediately bounce home).
+                            val ended = resp.status.isTerminal()
+                            if (ended) {
+                                // Game ended this turn — drop the persisted id +
+                                // the savedGameId so the Home screen doesn't offer
+                                // "Fortfahren" into a finished game.
                                 storage.saveGameId(null)
                             }
                             _state.update {
@@ -284,6 +320,7 @@ class GameViewModel(
                                     currentGuessChars = List(it.wordLength) { null },
                                     cursorIndex = 0,
                                     loading = false,
+                                    savedGameId = if (ended) null else it.savedGameId,
                                 )
                             }
                         }
