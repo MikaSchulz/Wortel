@@ -58,17 +58,30 @@ fun GameScreen(
         focusRequester.requestFocus()
     }
 
+    // Every clickable child (tiles, on-screen keys, TopAppBar icons) steals
+    // focus from the root Box when tapped — which would otherwise leave the
+    // physical keyboard non-responsive until the user clicked back on the
+    // background. Wrap every callback to re-request focus after the action so
+    // typing continues to work regardless of what was tapped.
+    val refocus: () -> Unit = { focusRequester.requestFocus() }
+    val onLetterFocused: (Char) -> Unit = { c -> onLetter(c); refocus() }
+    val onBackspaceFocused: () -> Unit = { onBackspace(); refocus() }
+    val onSubmitFocused: () -> Unit = { onSubmit(); refocus() }
+    val onTileClickFocused: (Int) -> Unit = { i -> onTileClick(i); refocus() }
+    val onToggleColorblindFocused: () -> Unit = { onToggleColorblind(); refocus() }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 navigationIcon = {
+                    // Back deliberately *doesn't* refocus — we're leaving the screen.
                     IconButton(onClick = onNewGame) {
                         WortelIcons.ArrowLeft()
                     }
                 },
                 title = { Text("Wortel") },
                 actions = {
-                    IconButton(onClick = onToggleColorblind) {
+                    IconButton(onClick = onToggleColorblindFocused) {
                         WortelIcons.Eye()
                     }
                 },
@@ -113,7 +126,7 @@ fun GameScreen(
                     attempts = state.attempts,
                     currentGuessChars = state.currentGuessChars,
                     cursorIndex = state.cursorIndex,
-                    onTileClick = onTileClick,
+                    onTileClick = onTileClickFocused,
                     wordLength = state.wordLength,
                     maxAttempts = state.maxAttempts,
                     shakeTrigger = state.shakeTrigger,
@@ -132,9 +145,9 @@ fun GameScreen(
                 }
 
                 Keyboard(
-                    onLetter = onLetter,
-                    onBackspace = onBackspace,
-                    onEnter = onSubmit,
+                    onLetter = onLetterFocused,
+                    onBackspace = onBackspaceFocused,
+                    onEnter = onSubmitFocused,
                     attempts = state.attempts,
                 )
             }
