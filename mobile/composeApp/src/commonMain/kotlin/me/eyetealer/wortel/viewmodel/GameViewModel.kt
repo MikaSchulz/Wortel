@@ -11,6 +11,7 @@ import me.eyetealer.wortel.data.AuthRepository
 import me.eyetealer.wortel.data.ErrorMessages
 import me.eyetealer.wortel.data.GameRepository
 import me.eyetealer.wortel.data.GameSessionStorage
+import me.eyetealer.wortel.data.SettingsStorage
 import me.eyetealer.wortel.data.WortelApiException
 import me.eyetealer.wortel.domain.GameStatus
 import me.eyetealer.wortel.domain.GuessResult
@@ -68,6 +69,11 @@ data class GameUiState(
      * Increment in any path where the user's guess was rejected.
      */
     val shakeTrigger: Int = 0,
+    /**
+     * When true, the UI uses the orange/blue colorblind palette instead
+     * of the default green/yellow. Persisted via SettingsStorage.
+     */
+    val colorblind: Boolean = false,
 ) {
     /** Stringified guess for sending to the server. Empty slots become ''. */
     val currentGuess: String
@@ -85,9 +91,10 @@ class GameViewModel(
     private val games: GameRepository = GameRepository(),
     private val auth: AuthRepository = AuthRepository(),
     private val storage: GameSessionStorage = GameSessionStorage(),
+    private val settings: SettingsStorage = SettingsStorage(),
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(GameUiState())
+    private val _state = MutableStateFlow(GameUiState(colorblind = settings.isColorblind()))
     val state: StateFlow<GameUiState> = _state.asStateFlow()
 
     private var restoreAttempted: Boolean = false
@@ -104,7 +111,7 @@ class GameViewModel(
         val savedId = storage.loadGameId()
         if (savedId == null) {
             // Nothing to restore — leave Splash and go straight to Home.
-            _state.value = GameUiState(initializing = false)
+            _state.value = GameUiState(initializing = false, colorblind = _state.value.colorblind)
             return
         }
         viewModelScope.launch { performRestore(savedId) }
@@ -135,7 +142,7 @@ class GameViewModel(
                 if (resp.status.isTerminal()) {
                     // Finished game — don't restore the user into a dead state.
                     storage.saveGameId(null)
-                    _state.value = GameUiState(initializing = false)
+                    _state.value = GameUiState(initializing = false, colorblind = _state.value.colorblind)
                 } else {
                     _state.value = GameUiState(
                         initializing = false,
@@ -164,7 +171,7 @@ class GameViewModel(
                 val isStale = code == "FORBIDDEN" || code == "GAME_NOT_FOUND"
                 if (isStale) {
                     storage.saveGameId(null)
-                    _state.value = GameUiState(initializing = false)
+                    _state.value = GameUiState(initializing = false, colorblind = _state.value.colorblind)
                 } else {
                     val saved = _state.value.savedGameId ?: id
                     _state.value = GameUiState(
@@ -229,10 +236,11 @@ class GameViewModel(
      * to bring the user back in via [resumeSavedGame].
      */
     fun goHome() {
-        val saved = _state.value.savedGameId
+        val current = _state.value
         _state.value = GameUiState(
             initializing = false,
-            savedGameId = saved,
+            savedGameId = current.savedGameId,
+            colorblind = current.colorblind,
         )
     }
 
@@ -370,6 +378,13 @@ class GameViewModel(
 
     fun clearError() {
         _state.update { it.copy(error = null) }
+    }
+
+    /** Flip the colorblind palette and persist it. */
+    fun toggleColorblind() {
+        val next = !_state.value.colorblind
+        settings.setColorblind(next)
+        _state.update { it.copy(colorblind = next) }
     }
 
     private fun Throwable.toMessage(): String = when (this) {

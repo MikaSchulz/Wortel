@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.eyetealer.wortel.domain.GuessResult
 import me.eyetealer.wortel.domain.LetterResult
-import me.eyetealer.wortel.ui.theme.WortelColors
+import me.eyetealer.wortel.ui.theme.LocalWortelPalette
 
 private val ROW_1 = "qwertzuiopü".toList()
 private val ROW_2 = "asdfghjklöä".toList()
@@ -81,10 +81,11 @@ private fun LetterKey(
     result: LetterResult?,
     onLetter: (Char) -> Unit,
 ) {
+    val palette = LocalWortelPalette.current
     val background = when (result) {
-        LetterResult.CORRECT -> WortelColors.correct
-        LetterResult.PRESENT -> WortelColors.present
-        LetterResult.ABSENT -> WortelColors.absent
+        LetterResult.CORRECT -> palette.correct
+        LetterResult.PRESENT -> palette.present
+        LetterResult.ABSENT -> palette.absent
         null -> MaterialTheme.colorScheme.surface
     }
     val textColor = if (result == null) MaterialTheme.colorScheme.onSurface else Color.White

@@ -11,14 +11,19 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import me.eyetealer.wortel.ui.screen.GameScreen
 import me.eyetealer.wortel.ui.screen.HomeScreen
 import me.eyetealer.wortel.ui.screen.SplashScreen
+import me.eyetealer.wortel.ui.theme.ColorblindPalette
+import me.eyetealer.wortel.ui.theme.DefaultPalette
 import me.eyetealer.wortel.ui.theme.WortelTheme
 import me.eyetealer.wortel.viewmodel.GameViewModel
 
 @Composable
 fun App() {
-    WortelTheme {
-        val vm: GameViewModel = viewModel { GameViewModel() }
-        val state by vm.state.collectAsState()
+    val vmHolder: GameViewModel = viewModel { GameViewModel() }
+    val previewState by vmHolder.state.collectAsState()
+    val palette = if (previewState.colorblind) ColorblindPalette else DefaultPalette
+    WortelTheme(palette = palette) {
+        val vm = vmHolder
+        val state = previewState
 
         // Optimistic flag flipped synchronously when the user clicks "Neues
         // Spiel" or "Spiel fortfahren" so the Game screen renders immediately
@@ -68,6 +73,7 @@ fun App() {
                     vm.goHome()
                 },
                 onTileClick = vm::onTileClick,
+                onToggleColorblind = vm::toggleColorblind,
                 onClearError = vm::clearError,
             )
         }

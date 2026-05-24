@@ -44,6 +44,47 @@ object WortelIcons {
         }
     }
 
+    /**
+     * Stylised eye glyph — two arcs forming an almond + a filled pupil.
+     * The pupil colour follows LocalContentColor so it reads in both
+     * normal and colorblind themes; pair with onClick to make a toggle.
+     */
+    @Composable
+    fun Eye(size: Dp = 24.dp, modifier: Modifier = Modifier) {
+        val color = LocalContentColor.current
+        Canvas(modifier.size(size)) {
+            val w = this.size.width
+            val h = this.size.height
+            val stroke = w * 0.09f
+            val topLeftX = w * 0.10f
+            val topLeftY = h * 0.25f
+            val arcW = w * 0.80f
+            val arcH = h * 0.50f
+            // Top arc bulging up
+            drawArc(
+                color = color,
+                startAngle = 180f,
+                sweepAngle = 180f,
+                useCenter = false,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke, cap = StrokeCap.Round),
+                topLeft = androidx.compose.ui.geometry.Offset(topLeftX, topLeftY),
+                size = androidx.compose.ui.geometry.Size(arcW, arcH),
+            )
+            // Bottom arc bulging down
+            drawArc(
+                color = color,
+                startAngle = 0f,
+                sweepAngle = 180f,
+                useCenter = false,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke, cap = StrokeCap.Round),
+                topLeft = androidx.compose.ui.geometry.Offset(topLeftX, topLeftY),
+                size = androidx.compose.ui.geometry.Size(arcW, arcH),
+            )
+            // Pupil
+            drawCircle(color, radius = w * 0.13f, center = androidx.compose.ui.geometry.Offset(w / 2, h / 2))
+        }
+    }
+
     @Composable
     fun Backspace(size: Dp = 24.dp, modifier: Modifier = Modifier) {
         val color = LocalContentColor.current

@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import me.eyetealer.wortel.domain.LetterResult
-import me.eyetealer.wortel.ui.theme.WortelColors
+import me.eyetealer.wortel.ui.theme.LocalWortelPalette
 
 private const val FLIP_HALF_MS = 250
 private const val FLIP_PEAK_ANGLE = 90f
@@ -98,10 +98,11 @@ fun Tile(
         }
     }
 
+    val palette = LocalWortelPalette.current
     val background = when (displayedResult) {
-        LetterResult.CORRECT -> WortelColors.correct
-        LetterResult.PRESENT -> WortelColors.present
-        LetterResult.ABSENT -> WortelColors.absent
+        LetterResult.CORRECT -> palette.correct
+        LetterResult.PRESENT -> palette.present
+        LetterResult.ABSENT -> palette.absent
         null -> Color.Transparent
     }
     val textColor = if (displayedResult == null) {

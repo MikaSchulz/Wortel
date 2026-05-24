@@ -33,6 +33,7 @@ import me.eyetealer.wortel.domain.GameStatus
 import me.eyetealer.wortel.ui.component.Board
 import me.eyetealer.wortel.ui.component.Keyboard
 import me.eyetealer.wortel.ui.component.WortelIcons
+import me.eyetealer.wortel.ui.theme.LocalWortelPalette
 import me.eyetealer.wortel.viewmodel.GameUiState
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -44,6 +45,7 @@ fun GameScreen(
     onSubmit: () -> Unit,
     onNewGame: () -> Unit,
     onTileClick: (Int) -> Unit,
+    onToggleColorblind: () -> Unit,
     @Suppress("UNUSED_PARAMETER") onClearError: () -> Unit,
 ) {
     // Capture physical-keyboard input (desktop browser, hardware kb on Android
@@ -65,6 +67,11 @@ fun GameScreen(
                     }
                 },
                 title = { Text("Wortel") },
+                actions = {
+                    IconButton(onClick = onToggleColorblind) {
+                        WortelIcons.Eye()
+                    }
+                },
             )
         },
     ) { padding ->
