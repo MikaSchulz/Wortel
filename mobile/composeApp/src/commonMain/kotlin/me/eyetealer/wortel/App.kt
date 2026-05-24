@@ -20,45 +20,47 @@ fun App() {
         val vm: GameViewModel = viewModel { GameViewModel() }
         val state by vm.state.collectAsState()
 
-        var screen by remember { mutableStateOf<Screen>(Screen.Home) }
+        // Optimistic flag flipped synchronously when the user clicks "Neues
+        // Spiel" so the Game screen renders immediately instead of waiting
+        // a frame for state.gameId to arrive from POST /games. Cleared when
+        // gameId arrives (success) or when state is reset.
+        var intentToStartGame by remember { mutableStateOf(false) }
 
-        // On first composition: ask the ViewModel to look up any persisted
-        // gameId and hydrate from the server. tryRestoreOnce() is idempotent.
         LaunchedEffect(Unit) {
             vm.tryRestoreOnce()
         }
 
-        // First exit from initializing decides the landing screen — Game if
-        // restore succeeded, Home otherwise. After that, this LaunchedEffect
-        // also handles the self-heal bounce when gameId is cleared by a
-        // stale-game error or by reset().
-        LaunchedEffect(state.initializing, state.gameId) {
-            if (state.initializing) return@LaunchedEffect
-            if (state.gameId != null && screen is Screen.Home) {
-                screen = Screen.Game
-            } else if (state.gameId == null && screen is Screen.Game) {
-                screen = Screen.Home
-            }
+        // Drop the intent flag once the game actually materialises.
+        LaunchedEffect(state.gameId) {
+            if (state.gameId != null) intentToStartGame = false
         }
 
-        when {
-            state.initializing -> SplashScreen()
-            screen is Screen.Home -> HomeScreen(
+        // Screen is derived from state in the same composition pass — no
+        // LaunchedEffect-driven lag means no Home flash during restore.
+        val screen: Screen = when {
+            state.initializing -> Screen.Splash
+            state.gameId != null || intentToStartGame -> Screen.Game
+            else -> Screen.Home
+        }
+
+        when (screen) {
+            Screen.Splash -> SplashScreen()
+            Screen.Home -> HomeScreen(
                 onStart = { wordLength ->
+                    // Set the intent BEFORE kicking off the network call so
+                    // the Game screen takes over on the very next render.
+                    intentToStartGame = true
                     vm.startNewGame(wordLength = wordLength)
-                    screen = Screen.Game
                 },
             )
-            screen is Screen.Game -> GameScreen(
+            Screen.Game -> GameScreen(
                 state = state,
                 onLetter = vm::onLetter,
                 onBackspace = vm::onBackspace,
                 onSubmit = vm::onSubmit,
                 onNewGame = {
-                    // Drop the in-memory game immediately so the next visit
-                    // to the game screen doesn't flash old tiles.
+                    intentToStartGame = false
                     vm.reset()
-                    screen = Screen.Home
                 },
                 onTileClick = vm::onTileClick,
                 onClearError = vm::clearError,
@@ -68,6 +70,7 @@ fun App() {
 }
 
 private sealed interface Screen {
+    data object Splash : Screen
     data object Home : Screen
     data object Game : Screen
 }

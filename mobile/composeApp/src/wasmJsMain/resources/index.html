@@ -21,31 +21,14 @@
         #loading {
             position: fixed;
             inset: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
-            color: #538D4E;
+            background: #121213;
             z-index: 1;
             pointer-events: none;
         }
     </style>
 </head>
 <body>
-    <div id="loading">Lade Wortel …</div>
-    <script>
-        // Compose Multiplatform mounts itself directly on document.body via
-        // ComposeViewport, replacing this loading div on first frame.
-        window.addEventListener('load', () => {
-            // Failsafe: if WASM startup takes >10s show a hint.
-            setTimeout(() => {
-                const el = document.getElementById('loading');
-                if (el && el.isConnected) {
-                    el.textContent = 'Lädt noch … Browser oder Netzwerk langsam?';
-                }
-            }, 10000);
-        });
-    </script>
+    <div id="loading"></div>
     <script src="composeApp.js"></script>
 </body>
 </html>
