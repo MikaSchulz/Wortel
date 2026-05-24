@@ -116,12 +116,23 @@ class GameViewModel(
                     onFailure = { e ->
                         val code = (e as? WortelApiException)?.code
                         val shouldShake = code == "UNKNOWN_WORD" || code == "WRONG_LENGTH"
+                        val gameStale = code == "FORBIDDEN" || code == "GAME_NOT_FOUND"
                         _state.update {
-                            it.copy(
-                                loading = false,
-                                error = e.toMessage(),
-                                shakeTrigger = if (shouldShake) it.shakeTrigger + 1 else it.shakeTrigger,
-                            )
+                            if (gameStale) {
+                                // Local gameId no longer valid (e.g. session changed
+                                // since the game was created). Drop the state so the
+                                // UI bounces back to "no game in progress".
+                                GameUiState(
+                                    error = e.toMessage() +
+                                        " Bitte neues Spiel starten.",
+                                )
+                            } else {
+                                it.copy(
+                                    loading = false,
+                                    error = e.toMessage(),
+                                    shakeTrigger = if (shouldShake) it.shakeTrigger + 1 else it.shakeTrigger,
+                                )
+                            }
                         }
                     },
                 )

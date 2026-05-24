@@ -1,6 +1,7 @@
 package me.eyetealer.wortel
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,7 +21,15 @@ fun App() {
 
         var screen by remember { mutableStateOf<Screen>(Screen.Home) }
 
-        when (val s = screen) {
+        // Self-heal: if the ViewModel resets gameId (e.g. server returned 403
+        // for a stale game), bounce back to Home so the user can start over.
+        LaunchedEffect(state.gameId) {
+            if (state.gameId == null && screen is Screen.Game) {
+                screen = Screen.Home
+            }
+        }
+
+        when (screen) {
             Screen.Home -> HomeScreen(
                 onStart = { wordLength ->
                     vm.startNewGame(wordLength = wordLength)
