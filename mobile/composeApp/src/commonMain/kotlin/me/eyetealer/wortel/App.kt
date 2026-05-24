@@ -10,6 +10,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import me.eyetealer.wortel.ui.screen.GameScreen
 import me.eyetealer.wortel.ui.screen.HomeScreen
+import me.eyetealer.wortel.ui.screen.SplashScreen
 import me.eyetealer.wortel.ui.theme.WortelTheme
 import me.eyetealer.wortel.viewmodel.GameViewModel
 
@@ -22,29 +23,33 @@ fun App() {
         var screen by remember { mutableStateOf<Screen>(Screen.Home) }
 
         // On first composition: ask the ViewModel to look up any persisted
-        // gameId and hydrate from the server. tryRestoreOnce() is idempotent
-        // so this won't fire on every recomposition.
+        // gameId and hydrate from the server. tryRestoreOnce() is idempotent.
         LaunchedEffect(Unit) {
             vm.tryRestoreOnce()
         }
 
-        // Bidirectional screen ↔ gameId sync:
-        //  - gameId becomes non-null while we're on Home (after a restore or
-        //    a successful create) → switch to Game
-        //  - gameId becomes null while we're on Game (stale game / reset) →
-        //    bounce back to Home
-        LaunchedEffect(state.gameId) {
-            screen = if (state.gameId != null) Screen.Game else Screen.Home
+        // First exit from initializing decides the landing screen — Game if
+        // restore succeeded, Home otherwise. After that, this LaunchedEffect
+        // also handles the self-heal bounce when gameId is cleared by a
+        // stale-game error or by reset().
+        LaunchedEffect(state.initializing, state.gameId) {
+            if (state.initializing) return@LaunchedEffect
+            if (state.gameId != null && screen is Screen.Home) {
+                screen = Screen.Game
+            } else if (state.gameId == null && screen is Screen.Game) {
+                screen = Screen.Home
+            }
         }
 
-        when (screen) {
-            Screen.Home -> HomeScreen(
+        when {
+            state.initializing -> SplashScreen()
+            screen is Screen.Home -> HomeScreen(
                 onStart = { wordLength ->
                     vm.startNewGame(wordLength = wordLength)
                     screen = Screen.Game
                 },
             )
-            Screen.Game -> GameScreen(
+            screen is Screen.Game -> GameScreen(
                 state = state,
                 onLetter = vm::onLetter,
                 onBackspace = vm::onBackspace,

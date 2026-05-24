@@ -17,6 +17,13 @@ import me.eyetealer.wortel.domain.GuessResult
 import me.eyetealer.wortel.domain.isTerminal
 
 data class GameUiState(
+    /**
+     * True until the ViewModel has decided whether to restore a saved game
+     * or land on Home. UI shows a splash while this is true so the user
+     * doesn't see the Home screen flash before being teleported into a
+     * restored game.
+     */
+    val initializing: Boolean = true,
     val gameId: String? = null,
     val wordLength: Int = 5,
     val maxAttempts: Int = 6,
@@ -75,11 +82,17 @@ class GameViewModel(
     fun tryRestoreOnce() {
         if (restoreAttempted) return
         restoreAttempted = true
-        val savedId = storage.loadGameId() ?: return
+        val savedId = storage.loadGameId()
+        if (savedId == null) {
+            // Nothing to restore — leave Splash and go straight to Home.
+            _state.value = GameUiState(initializing = false)
+            return
+        }
         viewModelScope.launch {
-            _state.update { it.copy(loading = true) }
+            // Stay on initializing=true while we ask the server. The user
+            // sees a splash, not Home, until we know where to send them.
             runCatching {
-                // ensureSignedIn now also waits for Supabase auth to finish
+                // ensureSignedIn also waits for Supabase auth to finish
                 // restoring a persisted session — otherwise the GET fires
                 // before currentSessionOrNull is populated and the server
                 // rejects with 403 because it sees no user_id.
@@ -90,9 +103,10 @@ class GameViewModel(
                     if (resp.status.isTerminal()) {
                         // Finished game — don't restore the user into a dead state.
                         storage.saveGameId(null)
-                        _state.value = GameUiState()
+                        _state.value = GameUiState(initializing = false)
                     } else {
                         _state.value = GameUiState(
+                            initializing = false,
                             gameId = resp.id,
                             wordLength = resp.wordLength,
                             maxAttempts = resp.maxAttempts,
@@ -110,7 +124,7 @@ class GameViewModel(
                     // 403 / 404 / network — drop the stale pointer and fall
                     // through to a clean Home screen.
                     storage.saveGameId(null)
-                    _state.value = GameUiState()
+                    _state.value = GameUiState(initializing = false)
                 },
             )
         }
@@ -121,6 +135,7 @@ class GameViewModel(
         // attempts / current guess disappear before the network call. Without
         // this the user briefly sees the old board while we wait for POST /games.
         _state.value = GameUiState(
+            initializing = false,
             wordLength = wordLength,
             maxAttempts = maxAttempts,
             remainingAttempts = maxAttempts,
@@ -141,6 +156,7 @@ class GameViewModel(
                 onSuccess = { resp ->
                     storage.saveGameId(resp.id)
                     _state.value = GameUiState(
+                        initializing = false,
                         gameId = resp.id,
                         wordLength = resp.wordLength,
                         maxAttempts = resp.maxAttempts,
@@ -166,7 +182,9 @@ class GameViewModel(
      */
     fun reset() {
         storage.saveGameId(null)
-        _state.value = GameUiState()
+        // initializing=false so the splash doesn't re-appear after the user
+        // intentionally navigated away from the game.
+        _state.value = GameUiState(initializing = false)
     }
 
     fun onLetter(letter: Char) {
@@ -280,6 +298,7 @@ class GameViewModel(
                                 // since the game was created). Drop the state so the
                                 // UI bounces back to "no game in progress".
                                 GameUiState(
+                                    initializing = false,
                                     error = e.toMessage() +
                                         " Bitte neues Spiel starten.",
                                 )
