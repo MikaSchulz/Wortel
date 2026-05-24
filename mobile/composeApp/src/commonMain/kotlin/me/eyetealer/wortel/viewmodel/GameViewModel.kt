@@ -41,8 +41,16 @@ class GameViewModel(
     val state: StateFlow<GameUiState> = _state.asStateFlow()
 
     fun startNewGame(wordLength: Int = 5, maxAttempts: Int = 6) {
+        // Reset visible state immediately so any previous game's tiles /
+        // attempts / current guess disappear before the network call. Without
+        // this the user briefly sees the old board while we wait for POST /games.
+        _state.value = GameUiState(
+            wordLength = wordLength,
+            maxAttempts = maxAttempts,
+            remainingAttempts = maxAttempts,
+            loading = true,
+        )
         viewModelScope.launch {
-            _state.update { it.copy(loading = true, error = null) }
             runCatching {
                 auth.ensureSignedIn()
                 games.create(
@@ -66,6 +74,15 @@ class GameViewModel(
                 },
             )
         }
+    }
+
+    /**
+     * Clears all in-memory game state. Called when the user navigates away
+     * (back button or "Neu"), so the next visit to the game screen never
+     * flashes the previous game's tiles before the new game loads.
+     */
+    fun reset() {
+        _state.value = GameUiState()
     }
 
     fun onLetter(letter: Char) {

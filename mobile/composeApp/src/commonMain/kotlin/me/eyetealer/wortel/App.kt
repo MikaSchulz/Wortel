@@ -41,7 +41,12 @@ fun App() {
                 onLetter = vm::onLetter,
                 onBackspace = vm::onBackspace,
                 onSubmit = vm::onSubmit,
-                onNewGame = { screen = Screen.Home },
+                onNewGame = {
+                    // Drop the in-memory game immediately so the next visit
+                    // to the game screen doesn't flash old tiles.
+                    vm.reset()
+                    screen = Screen.Home
+                },
                 onClearError = vm::clearError,
             )
         }
