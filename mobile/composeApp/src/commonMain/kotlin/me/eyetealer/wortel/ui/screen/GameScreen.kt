@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.focusable
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
@@ -14,8 +15,18 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.utf16CodePoint
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,6 +46,16 @@ fun GameScreen(
     onNewGame: () -> Unit,
     @Suppress("UNUSED_PARAMETER") onClearError: () -> Unit,
 ) {
+    // Capture physical-keyboard input (desktop browser, hardware kb on Android
+    // / iOS, Compose Desktop). The focus requester pulls focus on entry so the
+    // user can start typing immediately without clicking the canvas first.
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(state.gameId) {
+        // Re-acquire focus on each new game so a previous capture from the
+        // home screen click doesn't leave us deaf to input.
+        focusRequester.requestFocus()
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -53,7 +74,31 @@ fun GameScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
+                .padding(padding)
+                .focusRequester(focusRequester)
+                .focusable()
+                .onPreviewKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    when (event.key) {
+                        Key.Backspace, Key.Delete -> {
+                            onBackspace()
+                            true
+                        }
+                        Key.Enter, Key.NumPadEnter -> {
+                            onSubmit()
+                            true
+                        }
+                        else -> {
+                            val ch = event.utf16CodePoint.toChar().lowercaseChar()
+                            if (ch in 'a'..'z' || ch in GERMAN_UMLAUTS) {
+                                onLetter(ch)
+                                true
+                            } else {
+                                false
+                            }
+                        }
+                    }
+                },
         ) {
             Column(
                 modifier = Modifier.fillMaxSize().padding(8.dp),
@@ -98,6 +143,8 @@ fun GameScreen(
         }
     }
 }
+
+private val GERMAN_UMLAUTS = setOf('ä', 'ö', 'ü', 'ß')
 
 @Composable
 private fun StatusBanner(title: String, subtitle: String) {
