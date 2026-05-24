@@ -124,12 +124,15 @@ async function handleGuess(req: Request, id: string): Promise<Response> {
   assertUuid(id);
   const body = parseGuessBody(await readJson(req));
   const userId = await getUserId(req);
-  const game = await useCases().guess.execute({
+  const result = await useCases().guess.execute({
     gameId: id,
     guess: body.guess,
     userId,
   });
-  return jsonResponse(req, toGameStateResponse(game));
+  // Word-level rejection is normal gameplay: respond 200 with the unchanged
+  // game state plus a `rejectedGuess` marker. Real errors (forbidden, not
+  // found, game ended) still throw and surface as 4xx via mapErrorToResponse.
+  return jsonResponse(req, toGameStateResponse(result.game, result.rejection));
 }
 
 async function handleDailyMeta(req: Request): Promise<Response> {

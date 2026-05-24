@@ -60,6 +60,11 @@ paths:
   /games/{gameId}/guesses:
     post:
       summary: Submit a guess
+      description: |
+        Returns 200 with the current game state. If the guess was accepted,
+        the state includes the new attempt and updated status. If the guess
+        was rejected because the word is unknown or the length is wrong
+        (normal gameplay), the state is unchanged and `rejectedGuess` is set.
       parameters:
         - name: gameId
           in: path
@@ -75,13 +80,14 @@ paths:
               $ref: '#/components/schemas/GuessRequest'
       responses:
         '200':
-          description: Updated game state
+          description: |
+            Current game state. Check `rejectedGuess` — when present the
+            guess was rejected and state is unchanged; clients should
+            indicate this (e.g. shake animation).
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/GameState'
-        '400':
-          description: Invalid guess (wrong length, unknown word)
         '403':
           description: JWT user does not own this game
         '404':
@@ -196,6 +202,23 @@ components:
           type: string
           nullable: true
           description: revealed only when status is WON or LOST
+        rejectedGuess:
+          nullable: true
+          description: |
+            Present when the last submitted guess was rejected (unknown word
+            or wrong length). Clients should show a shake / soft cue. State
+            is unchanged in this case.
+          allOf:
+            - $ref: '#/components/schemas/RejectedGuess'
+    RejectedGuess:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum: [UNKNOWN_WORD, WRONG_LENGTH]
+        message:
+          type: string
     DailyChallengeMeta:
       type: object
       required: [day, wordLength, maxAttempts]

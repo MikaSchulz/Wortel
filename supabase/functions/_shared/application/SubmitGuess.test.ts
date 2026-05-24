@@ -115,14 +115,15 @@ Deno.test("SubmitGuess - happy path advances attempts and saves", async () => {
   const created = await new CreateGame(games, words)
     .execute({ ownerId: "user-a" });
 
-  const updated = await new SubmitGuess(games, words).execute({
+  const result = await new SubmitGuess(games, words).execute({
     gameId: created.id,
     guess: "warum",
     userId: "user-a",
   });
-  assertEquals(updated.attempts.length, 1);
-  assertEquals(updated.remainingAttempts, 5);
-  assertEquals(updated.status, "RUNNING");
+  assertEquals(result.rejection, undefined);
+  assertEquals(result.game.attempts.length, 1);
+  assertEquals(result.game.remainingAttempts, 5);
+  assertEquals(result.game.status, "RUNNING");
 
   const reloaded = await games.findById(created.id);
   assertEquals(reloaded?.attempts.length, 1);
@@ -135,34 +136,34 @@ Deno.test("SubmitGuess - retries once on ConcurrencyError, then succeeds", async
     .execute({ ownerId: "user-a" });
 
   games.failNextSaveWithConcurrency = true;
-  const updated = await new SubmitGuess(games, words).execute({
+  const result = await new SubmitGuess(games, words).execute({
     gameId: created.id,
     guess: "warum",
     userId: "user-a",
   });
-  assertEquals(updated.attempts.length, 1);
+  assertEquals(result.game.attempts.length, 1);
 });
 
-Deno.test("SubmitGuess - unknown word -> UNKNOWN_WORD", async () => {
+Deno.test("SubmitGuess - unknown word -> soft rejection, game unchanged", async () => {
   const games = new InMemoryGameRepository();
   const words = new FakeWordRepository("haben", new Set(["zzzzz"]));
   const created = await new CreateGame(games, words)
     .execute({ ownerId: "user-a" });
 
-  try {
-    await new SubmitGuess(games, words).execute({
-      gameId: created.id,
-      guess: "zzzzz",
-      userId: "user-a",
-    });
-    throw new Error("expected throw");
-  } catch (e) {
-    assert(e instanceof DomainError);
-    assertEquals((e as DomainError).code, "UNKNOWN_WORD");
-  }
+  const result = await new SubmitGuess(games, words).execute({
+    gameId: created.id,
+    guess: "zzzzz",
+    userId: "user-a",
+  });
+  assertEquals(result.rejection?.code, "UNKNOWN_WORD");
+  assertEquals(result.game.attempts.length, 0);
+
+  // No save was performed — the stored game has zero attempts too.
+  const reloaded = await games.findById(created.id);
+  assertEquals(reloaded?.attempts.length, 0);
 });
 
-Deno.test("SubmitGuess - forbidden for non-owner", async () => {
+Deno.test("SubmitGuess - forbidden for non-owner still throws", async () => {
   const games = new InMemoryGameRepository();
   const words = new FakeWordRepository("haben");
   const created = await new CreateGame(games, words)

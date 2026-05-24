@@ -109,20 +109,30 @@ class GameViewModel(
             runCatching { games.submitGuess(current.gameId, current.currentGuess) }
                 .fold(
                     onSuccess = { resp ->
-                        _state.update {
-                            it.copy(
-                                attempts = resp.attempts,
-                                status = resp.status,
-                                remainingAttempts = resp.remainingAttempts,
-                                secretWord = resp.secretWord,
-                                currentGuess = "",
-                                loading = false,
-                            )
+                        if (resp.rejectedGuess != null) {
+                            // Server says "valid request, invalid word" — normal
+                            // gameplay. Shake the row; state is unchanged.
+                            _state.update {
+                                it.copy(
+                                    loading = false,
+                                    shakeTrigger = it.shakeTrigger + 1,
+                                )
+                            }
+                        } else {
+                            _state.update {
+                                it.copy(
+                                    attempts = resp.attempts,
+                                    status = resp.status,
+                                    remainingAttempts = resp.remainingAttempts,
+                                    secretWord = resp.secretWord,
+                                    currentGuess = "",
+                                    loading = false,
+                                )
+                            }
                         }
                     },
                     onFailure = { e ->
                         val code = (e as? WortelApiException)?.code
-                        val shouldShake = code == "UNKNOWN_WORD" || code == "WRONG_LENGTH"
                         val gameStale = code == "FORBIDDEN" || code == "GAME_NOT_FOUND"
                         _state.update {
                             if (gameStale) {
@@ -137,7 +147,6 @@ class GameViewModel(
                                 it.copy(
                                     loading = false,
                                     error = e.toMessage(),
-                                    shakeTrigger = if (shouldShake) it.shakeTrigger + 1 else it.shakeTrigger,
                                 )
                             }
                         }
