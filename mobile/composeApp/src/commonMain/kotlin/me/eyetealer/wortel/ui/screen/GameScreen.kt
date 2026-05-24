@@ -6,18 +6,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Snackbar
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -25,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.eyetealer.wortel.domain.GameStatus
 import me.eyetealer.wortel.ui.component.Board
+import me.eyetealer.wortel.ui.component.ErrorBanner
 import me.eyetealer.wortel.ui.component.Keyboard
 import me.eyetealer.wortel.viewmodel.GameUiState
 
@@ -36,16 +32,8 @@ fun GameScreen(
     onBackspace: () -> Unit,
     onSubmit: () -> Unit,
     onNewGame: () -> Unit,
-    onClearError: () -> Unit,
+    @Suppress("UNUSED_PARAMETER") onClearError: () -> Unit,
 ) {
-    val snackbarHostState = remember { SnackbarHostState() }
-    LaunchedEffect(state.error) {
-        state.error?.let {
-            snackbarHostState.showSnackbar(it)
-            onClearError()
-        }
-    }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -54,11 +42,6 @@ fun GameScreen(
                     TextButton(onClick = onNewGame) { Text("Neu") }
                 },
             )
-        },
-        snackbarHost = {
-            SnackbarHost(snackbarHostState) { data ->
-                Snackbar { Text(data.visuals.message) }
-            }
         },
     ) { padding ->
         Box(
@@ -71,6 +54,9 @@ fun GameScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceBetween,
             ) {
+                // Persistent inline error — visible until next keystroke dismisses it.
+                ErrorBanner(message = state.error)
+
                 Board(
                     attempts = state.attempts,
                     currentGuess = state.currentGuess,

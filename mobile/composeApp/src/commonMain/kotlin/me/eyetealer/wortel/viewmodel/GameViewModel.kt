@@ -72,14 +72,21 @@ class GameViewModel(
         _state.update { s ->
             if (s.status != GameStatus.RUNNING) return@update s
             if (s.currentGuess.length >= s.wordLength) return@update s
-            s.copy(currentGuess = s.currentGuess + letter.lowercaseChar())
+            // Typing dismisses the last error so the next attempt has a clean slate.
+            s.copy(
+                currentGuess = s.currentGuess + letter.lowercaseChar(),
+                error = null,
+            )
         }
     }
 
     fun onBackspace() {
         _state.update { s ->
             if (s.currentGuess.isEmpty()) return@update s
-            s.copy(currentGuess = s.currentGuess.dropLast(1))
+            s.copy(
+                currentGuess = s.currentGuess.dropLast(1),
+                error = null,
+            )
         }
     }
 
