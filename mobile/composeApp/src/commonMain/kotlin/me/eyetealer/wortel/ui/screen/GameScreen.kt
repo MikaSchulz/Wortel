@@ -44,6 +44,7 @@ fun GameScreen(
     onBackspace: () -> Unit,
     onSubmit: () -> Unit,
     onNewGame: () -> Unit,
+    onTileClick: (Int) -> Unit,
     @Suppress("UNUSED_PARAMETER") onClearError: () -> Unit,
 ) {
     // Capture physical-keyboard input (desktop browser, hardware kb on Android
@@ -107,7 +108,9 @@ fun GameScreen(
             ) {
                 Board(
                     attempts = state.attempts,
-                    currentGuess = state.currentGuess,
+                    currentGuessChars = state.currentGuessChars,
+                    cursorIndex = state.cursorIndex,
+                    onTileClick = onTileClick,
                     wordLength = state.wordLength,
                     maxAttempts = state.maxAttempts,
                     shakeTrigger = state.shakeTrigger,

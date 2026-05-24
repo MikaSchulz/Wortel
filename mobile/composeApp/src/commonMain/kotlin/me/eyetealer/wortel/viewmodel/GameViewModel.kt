@@ -21,7 +21,20 @@ data class GameUiState(
     val status: GameStatus = GameStatus.RUNNING,
     val attempts: List<GuessResult> = emptyList(),
     val remainingAttempts: Int = 6,
-    val currentGuess: String = "",
+    /**
+     * Positional buffer for the current guess. Length is always [wordLength];
+     * each slot is either `null` (empty) or the typed character (lower-case).
+     * The cursor sits on a single slot (see [cursorIndex]) and typing replaces
+     * whatever is there, then advances. Lets the user click a tile to retarget
+     * the cursor instead of being forced to type strictly left-to-right.
+     */
+    val currentGuessChars: List<Char?> = List(5) { null },
+    /**
+     * Currently focused slot, in `0 until wordLength`. Receives the next typed
+     * character. Clicking a tile sets it; typing advances it (capped at the
+     * last slot so we never overflow).
+     */
+    val cursorIndex: Int = 0,
     val secretWord: String? = null,
     val loading: Boolean = false,
     val error: String? = null,
@@ -30,7 +43,15 @@ data class GameUiState(
      * Increment in any path where the user's guess was rejected.
      */
     val shakeTrigger: Int = 0,
-)
+) {
+    /** Stringified guess for sending to the server. Empty slots become ''. */
+    val currentGuess: String
+        get() = currentGuessChars.joinToString("") { it?.toString() ?: "" }
+
+    /** True once every slot has a character. */
+    val isCurrentGuessComplete: Boolean
+        get() = currentGuessChars.size == wordLength && currentGuessChars.all { it != null }
+}
 
 class GameViewModel(
     private val games: GameRepository = GameRepository(),
@@ -48,6 +69,8 @@ class GameViewModel(
             wordLength = wordLength,
             maxAttempts = maxAttempts,
             remainingAttempts = maxAttempts,
+            currentGuessChars = List(wordLength) { null },
+            cursorIndex = 0,
             loading = true,
         )
         viewModelScope.launch {
@@ -66,6 +89,8 @@ class GameViewModel(
                         wordLength = resp.wordLength,
                         maxAttempts = resp.maxAttempts,
                         remainingAttempts = resp.maxAttempts,
+                        currentGuessChars = List(resp.wordLength) { null },
+                        cursorIndex = 0,
                         loading = false,
                     )
                 },
@@ -88,10 +113,15 @@ class GameViewModel(
     fun onLetter(letter: Char) {
         _state.update { s ->
             if (s.status != GameStatus.RUNNING) return@update s
-            if (s.currentGuess.length >= s.wordLength) return@update s
-            // Typing dismisses the last error so the next attempt has a clean slate.
+            if (s.cursorIndex !in 0 until s.wordLength) return@update s
+            val chars = s.currentGuessChars.toMutableList()
+            chars[s.cursorIndex] = letter.lowercaseChar()
+            // Advance to next slot — stop at the last filled slot rather than
+            // overflowing so typing past the end just replaces the last char.
+            val nextCursor = (s.cursorIndex + 1).coerceAtMost(s.wordLength - 1)
             s.copy(
-                currentGuess = s.currentGuess + letter.lowercaseChar(),
+                currentGuessChars = chars,
+                cursorIndex = nextCursor,
                 error = null,
             )
         }
@@ -99,11 +129,37 @@ class GameViewModel(
 
     fun onBackspace() {
         _state.update { s ->
-            if (s.currentGuess.isEmpty()) return@update s
+            if (s.status != GameStatus.RUNNING) return@update s
+            val chars = s.currentGuessChars.toMutableList()
+            val cursor = s.cursorIndex
+            // If the cursor slot is filled, clear it without moving — typical
+            // when the user just typed the last char. Otherwise step left and
+            // clear the previous slot.
+            val (newChars, newCursor) = when {
+                cursor in chars.indices && chars[cursor] != null -> {
+                    chars[cursor] = null
+                    chars to cursor
+                }
+                cursor > 0 -> {
+                    val target = cursor - 1
+                    chars[target] = null
+                    chars to target
+                }
+                else -> return@update s
+            }
             s.copy(
-                currentGuess = s.currentGuess.dropLast(1),
+                currentGuessChars = newChars,
+                cursorIndex = newCursor,
                 error = null,
             )
+        }
+    }
+
+    fun onTileClick(index: Int) {
+        _state.update { s ->
+            if (s.status != GameStatus.RUNNING) return@update s
+            if (index !in 0 until s.wordLength) return@update s
+            s.copy(cursorIndex = index, error = null)
         }
     }
 
@@ -111,7 +167,7 @@ class GameViewModel(
         val current = _state.value
         if (current.gameId == null) return
         if (current.status != GameStatus.RUNNING) return
-        if (current.currentGuess.length != current.wordLength) {
+        if (!current.isCurrentGuessComplete) {
             // Local validation failure — shake immediately, no server roundtrip.
             _state.update {
                 it.copy(
@@ -142,7 +198,8 @@ class GameViewModel(
                                     status = resp.status,
                                     remainingAttempts = resp.remainingAttempts,
                                     secretWord = resp.secretWord,
-                                    currentGuess = "",
+                                    currentGuessChars = List(it.wordLength) { null },
+                                    cursorIndex = 0,
                                     loading = false,
                                 )
                             }

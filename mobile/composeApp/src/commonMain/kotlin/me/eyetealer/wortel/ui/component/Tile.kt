@@ -2,6 +2,7 @@ package me.eyetealer.wortel.ui.component
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,6 +24,8 @@ fun Tile(
     letter: Char?,
     result: LetterResult?,
     modifier: Modifier = Modifier,
+    selected: Boolean = false,
+    onClick: (() -> Unit)? = null,
 ) {
     val background = when (result) {
         LetterResult.CORRECT -> WortelColors.correct
@@ -32,16 +35,30 @@ fun Tile(
     }
     val textColor = if (result == null) MaterialTheme.colorScheme.onBackground else Color.White
 
+    // Border:
+    //   - revealed tile: no border (background carries the info)
+    //   - selected empty tile: thick primary-coloured border to mark the cursor
+    //   - other empty tile: subtle outline so the grid is visible
+    val borderWidth = when {
+        result != null -> 0.dp
+        selected -> 3.dp
+        else -> 2.dp
+    }
+    val borderColor = when {
+        result != null -> Color.Transparent
+        selected -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.onBackground.copy(alpha = 0.2f)
+    }
+
+    val clickModifier = if (onClick != null) Modifier.clickable { onClick() } else Modifier
+
     Box(
         modifier = modifier
             .size(56.dp)
             .clip(RoundedCornerShape(6.dp))
             .background(background)
-            .border(
-                width = if (result == null) 2.dp else 0.dp,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.2f),
-                shape = RoundedCornerShape(6.dp),
-            ),
+            .border(width = borderWidth, color = borderColor, shape = RoundedCornerShape(6.dp))
+            .then(clickModifier),
         contentAlignment = Alignment.Center,
     ) {
         if (letter != null) {

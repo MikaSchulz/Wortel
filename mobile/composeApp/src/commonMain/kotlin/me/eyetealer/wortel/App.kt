@@ -47,6 +47,7 @@ fun App() {
                     vm.reset()
                     screen = Screen.Home
                 },
+                onTileClick = vm::onTileClick,
                 onClearError = vm::clearError,
             )
         }

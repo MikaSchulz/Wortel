@@ -21,7 +21,9 @@ private const val SHAKE_STEP_MS = 45
 @Composable
 fun Board(
     attempts: List<GuessResult>,
-    currentGuess: String,
+    currentGuessChars: List<Char?>,
+    cursorIndex: Int,
+    onTileClick: (Int) -> Unit,
     wordLength: Int,
     maxAttempts: Int,
     shakeTrigger: Int = 0,
@@ -63,8 +65,10 @@ fun Board(
                             result = attempt.result.getOrNull(col),
                         )
                         isCurrent -> Tile(
-                            letter = currentGuess.getOrNull(col),
+                            letter = currentGuessChars.getOrNull(col),
                             result = null,
+                            selected = col == cursorIndex,
+                            onClick = { onTileClick(col) },
                         )
                         else -> Tile(letter = null, result = null)
                     }
