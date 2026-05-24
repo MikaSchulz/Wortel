@@ -10,9 +10,11 @@ import kotlinx.coroutines.launch
 import me.eyetealer.wortel.data.AuthRepository
 import me.eyetealer.wortel.data.ErrorMessages
 import me.eyetealer.wortel.data.GameRepository
+import me.eyetealer.wortel.data.GameSessionStorage
 import me.eyetealer.wortel.data.WortelApiException
 import me.eyetealer.wortel.domain.GameStatus
 import me.eyetealer.wortel.domain.GuessResult
+import me.eyetealer.wortel.domain.isTerminal
 
 data class GameUiState(
     val gameId: String? = null,
@@ -56,10 +58,59 @@ data class GameUiState(
 class GameViewModel(
     private val games: GameRepository = GameRepository(),
     private val auth: AuthRepository = AuthRepository(),
+    private val storage: GameSessionStorage = GameSessionStorage(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(GameUiState())
     val state: StateFlow<GameUiState> = _state.asStateFlow()
+
+    private var restoreAttempted: Boolean = false
+
+    /**
+     * Idempotent — called from App.kt on first composition. Looks up a
+     * persisted gameId; if one exists and the server still has it as a
+     * running game, hydrate the UI state from the server response so a
+     * page reload doesn't lose progress.
+     */
+    fun tryRestoreOnce() {
+        if (restoreAttempted) return
+        restoreAttempted = true
+        val savedId = storage.loadGameId() ?: return
+        viewModelScope.launch {
+            _state.update { it.copy(loading = true) }
+            runCatching {
+                auth.ensureSignedIn()
+                games.get(savedId)
+            }.fold(
+                onSuccess = { resp ->
+                    if (resp.status.isTerminal()) {
+                        // Finished game — don't restore the user into a dead state.
+                        storage.saveGameId(null)
+                        _state.value = GameUiState()
+                    } else {
+                        _state.value = GameUiState(
+                            gameId = resp.id,
+                            wordLength = resp.wordLength,
+                            maxAttempts = resp.maxAttempts,
+                            attempts = resp.attempts,
+                            status = resp.status,
+                            remainingAttempts = resp.remainingAttempts,
+                            secretWord = resp.secretWord,
+                            currentGuessChars = List(resp.wordLength) { null },
+                            cursorIndex = 0,
+                            loading = false,
+                        )
+                    }
+                },
+                onFailure = {
+                    // 403 / 404 / network — drop the stale pointer and fall
+                    // through to a clean Home screen.
+                    storage.saveGameId(null)
+                    _state.value = GameUiState()
+                },
+            )
+        }
+    }
 
     fun startNewGame(wordLength: Int = 5, maxAttempts: Int = 6) {
         // Reset visible state immediately so any previous game's tiles /
@@ -84,6 +135,7 @@ class GameViewModel(
                 )
             }.fold(
                 onSuccess = { resp ->
+                    storage.saveGameId(resp.id)
                     _state.value = GameUiState(
                         gameId = resp.id,
                         wordLength = resp.wordLength,
@@ -104,9 +156,12 @@ class GameViewModel(
     /**
      * Clears all in-memory game state. Called when the user navigates away
      * (back button or "Neu"), so the next visit to the game screen never
-     * flashes the previous game's tiles before the new game loads.
+     * flashes the previous game's tiles before the new game loads. Also
+     * drops the persisted gameId so a reload doesn't re-enter the game
+     * the user just left.
      */
     fun reset() {
+        storage.saveGameId(null)
         _state.value = GameUiState()
     }
 
@@ -192,6 +247,12 @@ class GameViewModel(
                                 )
                             }
                         } else {
+                            if (resp.status.isTerminal()) {
+                                // Game ended this turn — drop the persisted id
+                                // so a reload doesn't try to restore a finished
+                                // game (and then immediately bounce home).
+                                storage.saveGameId(null)
+                            }
                             _state.update {
                                 it.copy(
                                     attempts = resp.attempts,
@@ -208,6 +269,7 @@ class GameViewModel(
                     onFailure = { e ->
                         val code = (e as? WortelApiException)?.code
                         val gameStale = code == "FORBIDDEN" || code == "GAME_NOT_FOUND"
+                        if (gameStale) storage.saveGameId(null)
                         _state.update {
                             if (gameStale) {
                                 // Local gameId no longer valid (e.g. session changed

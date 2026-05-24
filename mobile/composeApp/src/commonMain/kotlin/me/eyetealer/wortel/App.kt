@@ -21,12 +21,20 @@ fun App() {
 
         var screen by remember { mutableStateOf<Screen>(Screen.Home) }
 
-        // Self-heal: if the ViewModel resets gameId (e.g. server returned 403
-        // for a stale game), bounce back to Home so the user can start over.
+        // On first composition: ask the ViewModel to look up any persisted
+        // gameId and hydrate from the server. tryRestoreOnce() is idempotent
+        // so this won't fire on every recomposition.
+        LaunchedEffect(Unit) {
+            vm.tryRestoreOnce()
+        }
+
+        // Bidirectional screen ↔ gameId sync:
+        //  - gameId becomes non-null while we're on Home (after a restore or
+        //    a successful create) → switch to Game
+        //  - gameId becomes null while we're on Game (stale game / reset) →
+        //    bounce back to Home
         LaunchedEffect(state.gameId) {
-            if (state.gameId == null && screen is Screen.Game) {
-                screen = Screen.Home
-            }
+            screen = if (state.gameId != null) Screen.Game else Screen.Home
         }
 
         when (screen) {
