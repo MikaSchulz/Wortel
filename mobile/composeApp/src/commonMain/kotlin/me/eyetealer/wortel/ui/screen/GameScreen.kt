@@ -20,7 +20,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.eyetealer.wortel.domain.GameStatus
 import me.eyetealer.wortel.ui.component.Board
-import me.eyetealer.wortel.ui.component.ErrorBanner
 import me.eyetealer.wortel.ui.component.Keyboard
 import me.eyetealer.wortel.viewmodel.GameUiState
 
@@ -54,9 +53,6 @@ fun GameScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceBetween,
             ) {
-                // Persistent inline error — visible until next keystroke dismisses it.
-                ErrorBanner(message = state.error)
-
                 Board(
                     attempts = state.attempts,
                     currentGuess = state.currentGuess,
