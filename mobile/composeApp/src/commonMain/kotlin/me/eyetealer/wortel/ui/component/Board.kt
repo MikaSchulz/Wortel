@@ -8,7 +8,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -17,6 +20,8 @@ import me.eyetealer.wortel.domain.GuessResult
 
 private val SHAKE_KEYFRAMES = listOf(-14f, 14f, -12f, 12f, -8f, 8f, -4f, 4f, 0f)
 private const val SHAKE_STEP_MS = 45
+
+private const val REVEAL_STAGGER_MS = 220
 
 @Composable
 fun Board(
@@ -29,9 +34,8 @@ fun Board(
     shakeTrigger: Int = 0,
     modifier: Modifier = Modifier,
 ) {
-    // Animate translationX of the active row when shakeTrigger changes.
-    // graphicsLayer is used instead of Modifier.offset so the animation
-    // doesn't re-run layout / measurement — pure GPU transform.
+    // graphicsLayer is used instead of Modifier.offset so the shake doesn't
+    // re-run layout / measurement — pure GPU transform.
     val shakeOffset = remember { Animatable(0f) }
     LaunchedEffect(shakeTrigger) {
         if (shakeTrigger > 0) {
@@ -39,6 +43,16 @@ fun Board(
                 shakeOffset.animateTo(target, animationSpec = tween(SHAKE_STEP_MS))
             }
         }
+    }
+
+    // Track which submitted-row index is "fresh" — i.e. it appeared this frame
+    // because attempts.size just grew. Tiles in that row animate their reveal;
+    // older rows snap straight to their final colour.
+    var rowToAnimate by remember { mutableStateOf(-1) }
+    var prevAttemptCount by remember { mutableStateOf(attempts.size) }
+    LaunchedEffect(attempts.size) {
+        rowToAnimate = if (attempts.size > prevAttemptCount) attempts.size - 1 else -1
+        prevAttemptCount = attempts.size
     }
 
     Column(
@@ -63,6 +77,11 @@ fun Board(
                         attempt != null -> Tile(
                             letter = attempt.guess.getOrNull(col),
                             result = attempt.result.getOrNull(col),
+                            revealDelayMs = if (rowIndex == rowToAnimate) {
+                                col * REVEAL_STAGGER_MS
+                            } else {
+                                null
+                            },
                         )
                         isCurrent -> Tile(
                             letter = currentGuessChars.getOrNull(col),
