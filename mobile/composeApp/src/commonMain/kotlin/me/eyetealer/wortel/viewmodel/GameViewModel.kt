@@ -133,22 +133,19 @@ class GameViewModel(
         restoreAttempted = true
         viewModelScope.launch {
             auth.awaitInitialized()
+            // IMPORTANT: don't write state.user here. The observer flow in
+            // init{} is the single source of truth for user — overwriting
+            // state with a snapshot of currentUserState() races with the
+            // observer's first emission and can pin state.user to SignedOut
+            // even when the session is fully restored from storage.
             val user = auth.currentUserState()
             if (!user.isAuthenticated) {
-                _state.value = GameUiState(
-                    initializing = false,
-                    user = user,
-                    colorblind = _state.value.colorblind,
-                )
+                _state.update { it.copy(initializing = false) }
                 return@launch
             }
             val savedId = storage.loadGameId()
             if (savedId == null) {
-                _state.value = GameUiState(
-                    initializing = false,
-                    user = user,
-                    colorblind = _state.value.colorblind,
-                )
+                _state.update { it.copy(initializing = false) }
                 return@launch
             }
             performRestore(savedId)
