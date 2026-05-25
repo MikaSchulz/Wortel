@@ -10,6 +10,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import me.eyetealer.wortel.ui.screen.GameScreen
 import me.eyetealer.wortel.ui.screen.HomeScreen
+import me.eyetealer.wortel.ui.screen.LoginScreen
 import me.eyetealer.wortel.ui.screen.SplashScreen
 import me.eyetealer.wortel.ui.theme.ColorblindPalette
 import me.eyetealer.wortel.ui.theme.DefaultPalette
@@ -41,12 +42,18 @@ fun App() {
 
         val screen: Screen = when {
             state.initializing -> Screen.Splash
+            !state.user.isAuthenticated -> Screen.Login
             state.gameId != null || intentToStartGame -> Screen.Game
             else -> Screen.Home
         }
 
         when (screen) {
             Screen.Splash -> SplashScreen()
+            Screen.Login -> LoginScreen(
+                onGoogleSignIn = vm::signInWithGoogle,
+                onGuestSignIn = vm::signInAsGuest,
+                error = state.error,
+            )
             Screen.Home -> HomeScreen(
                 onStart = { wordLength ->
                     intentToStartGame = true
@@ -60,6 +67,9 @@ fun App() {
                     // Game state. No half-loaded board in between.
                     vm.resumeSavedGame()
                 },
+                user = state.user,
+                onSignOut = vm::signOut,
+                onUpgradeToGoogle = vm::signInWithGoogle,
             )
             Screen.Game -> GameScreen(
                 state = state,
@@ -82,6 +92,7 @@ fun App() {
 
 private sealed interface Screen {
     data object Splash : Screen
+    data object Login : Screen
     data object Home : Screen
     data object Game : Screen
 }

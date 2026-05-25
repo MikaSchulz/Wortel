@@ -12,6 +12,7 @@ import me.eyetealer.wortel.data.ErrorMessages
 import me.eyetealer.wortel.data.GameRepository
 import me.eyetealer.wortel.data.GameSessionStorage
 import me.eyetealer.wortel.data.SettingsStorage
+import me.eyetealer.wortel.data.UserState
 import me.eyetealer.wortel.data.WortelApiException
 import me.eyetealer.wortel.domain.GameStatus
 import me.eyetealer.wortel.domain.GuessResult
@@ -74,6 +75,12 @@ data class GameUiState(
      * of the default green/yellow. Persisted via SettingsStorage.
      */
     val colorblind: Boolean = false,
+    /**
+     * Current Supabase user. SignedOut means "show LoginScreen".
+     * Anonymous users count as authenticated (they can play) but the UI
+     * can prompt them to upgrade to a real account.
+     */
+    val user: UserState = UserState.SignedOut,
 ) {
     /** Stringified guess for sending to the server. Empty slots become ''. */
     val currentGuess: String
@@ -99,22 +106,98 @@ class GameViewModel(
 
     private var restoreAttempted: Boolean = false
 
+    init {
+        // Keep state.user in sync with whatever the SDK reports. The
+        // observer fires once at startup (Initializing / NotAuthenticated /
+        // Authenticated) and then on every login, logout, or session refresh.
+        viewModelScope.launch {
+            auth.observeUser().collect { user ->
+                _state.update { it.copy(user = user) }
+            }
+        }
+    }
+
     /**
-     * Idempotent — called from App.kt on first composition. Looks up a
-     * persisted gameId; if one exists and the server still has it as a
-     * running game, hydrate the UI state from the server response so a
-     * page reload doesn't lose progress.
+     * Idempotent — called from App.kt on first composition.
+     *
+     * Order:
+     *   1. Wait for Supabase auth to finish loading any persisted session.
+     *   2. If no user is signed in → exit Splash so the LoginScreen takes over.
+     *      We deliberately do NOT auto-sign-in anonymously here; signing in
+     *      as guest is an explicit user choice on the LoginScreen.
+     *   3. If signed in, look up the persisted gameId and hydrate from the
+     *      server (existing performRestore flow).
      */
     fun tryRestoreOnce() {
         if (restoreAttempted) return
         restoreAttempted = true
-        val savedId = storage.loadGameId()
-        if (savedId == null) {
-            // Nothing to restore — leave Splash and go straight to Home.
-            _state.value = GameUiState(initializing = false, colorblind = _state.value.colorblind)
-            return
+        viewModelScope.launch {
+            auth.awaitInitialized()
+            val user = auth.currentUserState()
+            if (!user.isAuthenticated) {
+                _state.value = GameUiState(
+                    initializing = false,
+                    user = user,
+                    colorblind = _state.value.colorblind,
+                )
+                return@launch
+            }
+            val savedId = storage.loadGameId()
+            if (savedId == null) {
+                _state.value = GameUiState(
+                    initializing = false,
+                    user = user,
+                    colorblind = _state.value.colorblind,
+                )
+                return@launch
+            }
+            performRestore(savedId)
         }
-        viewModelScope.launch { performRestore(savedId) }
+    }
+
+    /** OAuth via Supabase → browser redirects, session arrives after callback. */
+    fun signInWithGoogle() {
+        viewModelScope.launch {
+            runCatching { auth.signInWithGoogle() }
+                .onFailure { e ->
+                    _state.update { it.copy(error = e.toMessage()) }
+                }
+        }
+    }
+
+    /** Anonymous guest play. State.user updates via observer on success. */
+    fun signInAsGuest() {
+        _state.update { it.copy(initializing = true) }
+        viewModelScope.launch {
+            runCatching { auth.signInAnonymously() }
+                .fold(
+                    onSuccess = {
+                        _state.update {
+                            it.copy(
+                                initializing = false,
+                                user = auth.currentUserState(),
+                            )
+                        }
+                    },
+                    onFailure = { e ->
+                        _state.update {
+                            it.copy(initializing = false, error = e.toMessage())
+                        }
+                    },
+                )
+        }
+    }
+
+    fun signOut() {
+        viewModelScope.launch {
+            runCatching { auth.signOut() }
+            storage.saveGameId(null)
+            _state.value = GameUiState(
+                initializing = false,
+                user = UserState.SignedOut,
+                colorblind = _state.value.colorblind,
+            )
+        }
     }
 
     /**
@@ -131,18 +214,21 @@ class GameViewModel(
 
     private suspend fun performRestore(id: String) {
         runCatching {
-            // ensureSignedIn also waits for Supabase auth to finish
-            // restoring a persisted session — otherwise the GET fires
-            // before currentSessionOrNull is populated and the server
-            // rejects with 403 because it sees no user_id.
-            auth.ensureSignedIn()
+            // tryRestoreOnce / resumeSavedGame already awaited auth init
+            // before invoking this — the SDK has a valid session and
+            // GameRepository will attach the JWT correctly.
+            auth.awaitInitialized()
             games.get(id)
         }.fold(
             onSuccess = { resp ->
                 if (resp.status.isTerminal()) {
                     // Finished game — don't restore the user into a dead state.
                     storage.saveGameId(null)
-                    _state.value = GameUiState(initializing = false, colorblind = _state.value.colorblind)
+                    _state.value = GameUiState(
+                    initializing = false,
+                    user = _state.value.user,
+                    colorblind = _state.value.colorblind,
+                )
                 } else {
                     _state.value = GameUiState(
                         initializing = false,
@@ -171,7 +257,11 @@ class GameViewModel(
                 val isStale = code == "FORBIDDEN" || code == "GAME_NOT_FOUND"
                 if (isStale) {
                     storage.saveGameId(null)
-                    _state.value = GameUiState(initializing = false, colorblind = _state.value.colorblind)
+                    _state.value = GameUiState(
+                    initializing = false,
+                    user = _state.value.user,
+                    colorblind = _state.value.colorblind,
+                )
                 } else {
                     val saved = _state.value.savedGameId ?: id
                     _state.value = GameUiState(
@@ -201,7 +291,7 @@ class GameViewModel(
         )
         viewModelScope.launch {
             runCatching {
-                auth.ensureSignedIn()
+                auth.awaitInitialized()
                 games.create(
                     me.eyetealer.wortel.data.CreateGameRequest(
                         wordLength = wordLength,
@@ -241,6 +331,7 @@ class GameViewModel(
             initializing = false,
             savedGameId = current.savedGameId,
             colorblind = current.colorblind,
+            user = current.user,
         )
     }
 
@@ -358,6 +449,8 @@ class GameViewModel(
                                 GameUiState(
                                     initializing = false,
                                     error = e.toMessage() + " Bitte neues Spiel starten.",
+                                    user = _state.value.user,
+                                    colorblind = _state.value.colorblind,
                                 )
                             }
                         } else {
