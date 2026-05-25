@@ -44,10 +44,12 @@ import spacy
 # ============================================================
 
 # Mindesthäufigkeit für Aufnahme in die Akzeptanzliste.
-# Quelle ist OpenSubtitles2018-DE. 1000 öffnet das Reservoir auf
-# "kommt im Alltag durchaus vor" — der POS+Lemma-Filter siebt das
-# Rauschen danach wieder raus. Mit 3000 blieb zu wenig übrig.
-MIN_FREQ_VALID = 1000
+# Bei 1000 blieben nach POS+Lemma+Hunspell-Sieb noch zu wenig Wörter
+# übrig. 100 öffnet das Reservoir massiv (Quelle ist sehr großes
+# Subtitle-Korpus, hier ist 100 Erwähnungen schon "kommt vor"). Da
+# die Hunspell-Whitelist alles Nicht-Deutsche und der POS-Filter
+# alles Nicht-Inhaltliche wegfängt, riskieren wir kaum Rauschen.
+MIN_FREQ_VALID = 100
 
 # Anzahl der häufigsten Wörter, die als Rate-Ziel verwendet werden.
 # Kleinere Zahl = bekanntere Lösungen = weniger Spielerfrust.
@@ -281,75 +283,79 @@ def load_nlp() -> "spacy.language.Language":
     raise SystemExit(1)
 
 
-def analyze_word(nlp, word: str):
+def classify_word(nlp, word: str) -> tuple[bool, bool, str | None]:
     """
-    POS-Tagging mit Capitalization-Hedge UND Veto durch Lowercase.
+    Liefert Klassifikation in zwei Achsen:
 
-    Naiver Cap-Hedge produziert üble False-Positives: "hast" lowercase
-    -> VERB lemma "haben" (richtig erkannt als Konjugation), wird aber
-    "Hast" als seltenes Nomen ("die Hast" = Eile) wieder reingespült.
-    Selbe Falle bei "sage" (-> Sage), "halt" (-> Halt), "eins" (-> Eins),
-    "gehe"/"sehe"/"sieh"/"ging" (alle nur Verbflexionen).
+      (accepted, is_lemma, lemma):
+        accepted   = True, wenn das Wort als deutsches Inhaltswort
+                     (Nomen / Adjektiv / Verb in irgendeiner Form,
+                     inkl. flektiert) gelten darf -> in die Valid-Liste.
+        is_lemma   = True, wenn es zusätzlich die Grundform ist
+                     -> qualifiziert sich als Solution.
+        lemma      = die spaCy-Lemma-Ausgabe (für Profanity-Check).
 
-    Strategie: lowercase zuerst befragen. Wenn der eine eindeutige
-    Nicht-Lemma-Form als VERB/AUX taggt -> rejecten (Konjugation).
-    Wenn er eine harte Nicht-Erlaubt-POS taggt (Zahl, Partikel,
-    Pronomen, Determiner, Präposition, Konjunktion) -> rejecten.
-    Nur wenn lowercase ambig/unauffällig ist, ziehen wir die
-    Cap-Variante als Fallback heran — die ist nur fürs Aufpolieren
-    von Substantiven da, die spaCy ohne Großbuchstaben verwirft.
+    Begründung: vorher wurde alles, was kein Lemma war, komplett
+    verworfen. Damit fielen alltägliche Wörter wie "Hunde", "kleine",
+    "ging" aus der Akzeptanzliste — der Spieler konnte sie nicht mal
+    eingeben, obwohl sie eindeutig deutsche Wörter sind. Jetzt: Valid
+    behält alle flektierten Formen, Solutions bleiben Grundformen.
 
-    Rückgabe: spaCy-Token bei Erfolg, sonst None.
+    POS-Veto bleibt für strukturell ungeeignete Tags (Zahlen, Partikel,
+    Pronomen, Determiner, Präpositionen, Konjunktionen, Interjektionen).
     """
     lower = word.lower()
     cap = lower[:1].upper() + lower[1:]
 
-    # POS-Kategorien, die wir nie als gültiges Wortspiel-Wort akzeptieren,
-    # auch wenn die Cap-Variante etwas anderes behauptet.
-    LOWERCASE_VETO = {
+    # POS-Tags, die wir niemals als Inhaltswort akzeptieren — diese
+    # Klasse von Wörtern eignet sich weder als Solution noch als Guess.
+    HARD_VETO = {
         "NUM",   # eins, zwei, drei
-        "INTJ",  # naja, hallo, äh
+        "INTJ",  # naja, hallo, äh, juhu
         "PRON",  # ich, du, wir, mich
         "DET",   # der, die, das, ein
         "ADP",   # in, auf, mit, durch
         "CCONJ", # und, oder, aber
         "SCONJ", # weil, dass, ob
         "PART",  # nicht, ja, doch (Modalpartikel)
-        "AUX",   # bin, hast, war, würde — Hilfsverbformen sind nie Lemma
     }
+
+    # Akzeptierte Content-Tags. AUX (Hilfsverben "bin", "hast", "war")
+    # akzeptieren wir als Valid-Eingabe (sie sind reale Wörter), aber
+    # nie als Solution (sind immer flektiert).
+    CONTENT_TAGS = {"NOUN", "ADJ", "VERB", "AUX"}
 
     doc_low = nlp(lower)
     t_low = doc_low[0] if doc_low else None
 
-    # 1) Konjugationen: lowercase VERB mit Lemma != Wort -> hart raus.
-    if t_low and t_low.pos_ == "VERB" and t_low.lemma_.lower() != lower:
-        return None
+    if t_low and t_low.pos_ in HARD_VETO:
+        return (False, False, None)
 
-    # 2) Harte Lowercase-Veto-Kategorien.
-    if t_low and t_low.pos_ in LOWERCASE_VETO:
-        return None
+    if t_low and t_low.pos_ in CONTENT_TAGS:
+        is_lemma = (
+            t_low.pos_ != "AUX"
+            and t_low.text.lower() == t_low.lemma_.lower()
+        )
+        return (True, is_lemma, t_low.lemma_)
 
-    # 3) Lowercase-Akzeptanz: erlaubte POS + Lemma stimmt.
-    if (
-        t_low
-        and t_low.pos_ in ALLOWED_POS
-        and t_low.text.lower() == t_low.lemma_.lower()
-    ):
-        return t_low
-
-    # 4) Fallback Cap-Variante — fischt Substantive ein, die spaCy
-    #    lowercase fälschlich als PROPN/ADV taggt.
+    # Fallback: Cap-Variante. Wenn die Lowercase-Variante in keine
+    # akzeptierte Klasse fiel (typischerweise weil spaCy bei kleinen
+    # Substantiven daneben tippt und PROPN/ADV/X ausgibt), schauen
+    # wir die großgeschriebene Form an.
     if cap != lower:
         doc_cap = nlp(cap)
         if doc_cap:
             t_cap = doc_cap[0]
-            if (
-                t_cap.pos_ in ALLOWED_POS
-                and t_cap.text.lower() == t_cap.lemma_.lower()
-            ):
-                return t_cap
+            if t_cap.pos_ in HARD_VETO:
+                return (False, False, None)
+            if t_cap.pos_ in CONTENT_TAGS:
+                is_lemma = (
+                    t_cap.pos_ != "AUX"
+                    and t_cap.text.lower() == t_cap.lemma_.lower()
+                )
+                return (True, is_lemma, t_cap.lemma_)
 
-    return None
+    return (False, False, None)
 
 
 # ============================================================
@@ -372,8 +378,13 @@ def main() -> int:
         return 1
     print(f"  -> {len(raw_lines)} Einträge.")
 
-    # Sammle pro Länge bereits frequenzabsteigend (Quelle ist so sortiert).
-    by_length: dict[int, list[str]] = {n: [] for n in WORD_LENGTHS}
+    # Sammle pro Länge separat:
+    #   valid_by_length[N]   -> alle akzeptierten Formen (inkl. Flexion)
+    #   lemma_by_length[N]   -> Untermenge: nur Grundformen (Solutions)
+    # Beide Listen behalten die Frequenz-Reihenfolge der Quelle, weil wir
+    # die häufigsten Lemmas oben als Solutions slicen wollen.
+    valid_by_length: dict[int, list[str]] = {n: [] for n in WORD_LENGTHS}
+    lemma_by_length: dict[int, list[str]] = {n: [] for n in WORD_LENGTHS}
     seen: set[str] = set()
 
     print("\nFilter + POS-Tagging (das kann ein paar Minuten dauern)...")
@@ -418,27 +429,32 @@ def main() -> int:
         if german_whitelist and word_lower not in german_whitelist:
             continue
 
-        # POS-Tag mit Capitalization-Hedge: spaCy braucht Großschreibung
-        # für Substantive. Wir testen klein UND groß, akzeptieren wenn
-        # eine Variante einen erlaubten POS-Tag + Lemma-Match liefert.
-        token = analyze_word(nlp, word)
-        if token is None:
+        # Klassifizierung: ist es überhaupt ein deutsches Inhaltswort,
+        # und ist es die Grundform?
+        accepted, is_lemma, lemma = classify_word(nlp, word)
+        if not accepted:
             continue
 
         # Lemma-Profanity-Check (zusätzlich zum Wort-Check oben).
-        if token.lemma_.lower() in PROFANITY_BLOCKLIST:
+        if lemma and lemma.lower() in PROFANITY_BLOCKLIST:
             continue
 
         seen.add(word_lower)
-        by_length[len(word)].append(word_lower)
+        valid_by_length[len(word)].append(word_lower)
+        if is_lemma:
+            lemma_by_length[len(word)].append(word_lower)
 
-    total = sum(len(v) for v in by_length.values())
-    print(f"\nAkzeptiert: {total} Wörter über alle Längen.\n")
+    total_valid = sum(len(v) for v in valid_by_length.values())
+    total_lemma = sum(len(v) for v in lemma_by_length.values())
+    print(
+        f"\nAkzeptiert: {total_valid} Wörter (davon {total_lemma} Lemmas) "
+        "über alle Längen.\n"
+    )
 
     print("Schreibe TS-Module + Debug-Output...")
     for length in WORD_LENGTHS:
-        valid_words = by_length[length]
-        solutions = valid_words[:TOP_N_SOLUTIONS]
+        valid_words = valid_by_length[length]
+        solutions = lemma_by_length[length][:TOP_N_SOLUTIONS]
 
         write_ts_module(valid_words, length, "valid")
         write_ts_module(solutions, length, "solutions")
