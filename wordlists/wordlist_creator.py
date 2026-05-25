@@ -69,6 +69,17 @@ SURNAMES_URL = (
     "https://raw.githubusercontent.com/PenTestical/german_names/"
     "master/most_common_german_surnames.txt"
 )
+# Hunspell-Wörterbuch als Whitelist gegen englisches Subtitles-Rauschen.
+# OpenSubtitles2018-DE enthält viele englische Tokens (Namen, Filmtitel,
+# Dialogfragmente). Wörter wie "burt", "jodi", "hugh", "look" passieren
+# unsere Frequenz- und POS-Filter, weil spaCy unbekannte Tokens default
+# als NOUN taggt und lemma == word zurückgibt. Hunspells de_DE_frami
+# enthält nur tatsächlich existierende deutsche Wörter (inkl. flektierter
+# Formen), das schneidet das fremdsprachige Rauschen sauber ab.
+HUNSPELL_DIC_URL = (
+    "https://raw.githubusercontent.com/LibreOffice/dictionaries/"
+    "master/de/de_DE_frami.dic"
+)
 
 # Output-Pfad: TS-Module direkt in das Edge-Function-Bundle schreiben.
 HERE = Path(__file__).resolve().parent
@@ -147,6 +158,46 @@ def fetch_lines(url: str) -> list[str]:
         return raw.decode("utf-8").splitlines()
     except UnicodeDecodeError:
         return raw.decode("latin-1").splitlines()
+
+
+def load_german_whitelist() -> set[str]:
+    """
+    Lade Hunspell-de_DE_frami als Whitelist deutscher Wörter (inkl.
+    flektierter Formen). Wird gegen Eingaben aus der Frequenzliste
+    geprüft, um englisches/fremdsprachiges Rauschen rauszuwerfen.
+
+    Hunspell-.dic-Format:
+        N            <- erste Zeile = Anzahl Einträge
+        Wort/FLAGS   <- ein Eintrag pro Zeile, FLAGS optional nach Slash
+        Wort
+        ...
+    """
+    print("Lade Hunspell-de_DE Whitelist...")
+    try:
+        lines = fetch_lines(HUNSPELL_DIC_URL)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  Warnung: Hunspell-Download fehlgeschlagen ({exc}). "
+              "Filter ist ohne Whitelist aktiv -> mehr englisches Rauschen.")
+        return set()
+
+    words: set[str] = set()
+    # Erste Zeile ist die Eintragsanzahl. Falls die Datei das nicht enthält
+    # (manche Mirrors weichen ab), beginnen wir trotzdem ab Index 0.
+    start = 1 if lines and lines[0].strip().isdigit() else 0
+    for line in lines[start:]:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        # Hunspell-.dic enthält manchmal #-Kommentarzeilen (Header,
+        # Versionshinweis). Die nicht als Wörter aufnehmen.
+        if stripped.startswith("#"):
+            continue
+        head = stripped.split("/", 1)[0].strip()
+        if not head:
+            continue
+        words.add(head.lower())
+    print(f"  -> {len(words)} deutsche Wörter im Whitelist-Set.")
+    return words
 
 
 def load_names_blocklist() -> set[str]:
@@ -310,6 +361,7 @@ def main() -> int:
     # spaCy-Modell laden — Lemma + POS. Größtes verfügbares zuerst.
     nlp = load_nlp()
 
+    german_whitelist = load_german_whitelist()
     names_blocklist = load_names_blocklist()
 
     print("\nLade Frequenzliste...")
@@ -357,6 +409,13 @@ def main() -> int:
         if word_lower in names_blocklist:
             continue
         if word_lower in PROFANITY_BLOCKLIST:
+            continue
+        # Whitelist-Filter: nur wenn Hunspell das Wort kennt. Ohne diese
+        # Hürde rutschen englische Tokens (burt, jodi, hugh, look) durch,
+        # weil spaCy unbekannte Wörter als generisches NOUN klassifiziert.
+        # Skip nur wenn die Whitelist tatsächlich geladen wurde — sonst
+        # würden wir bei Download-Fehler alles verwerfen.
+        if german_whitelist and word_lower not in german_whitelist:
             continue
 
         # POS-Tag mit Capitalization-Hedge: spaCy braucht Großschreibung
