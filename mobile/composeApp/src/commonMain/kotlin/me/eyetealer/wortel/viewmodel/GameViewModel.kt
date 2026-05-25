@@ -268,6 +268,8 @@ class GameViewModel(
                         initializing = false,
                         savedGameId = saved,
                         error = e.toMessage(),
+                        user = _state.value.user,
+                        colorblind = _state.value.colorblind,
                     )
                 }
             },
@@ -280,6 +282,8 @@ class GameViewModel(
         // this the user briefly sees the old board while we wait for POST /games.
         // Starting a new game discards any previously saved game.
         storage.saveGameId(null)
+        val carriedUser = _state.value.user
+        val carriedColorblind = _state.value.colorblind
         _state.value = GameUiState(
             initializing = false,
             wordLength = wordLength,
@@ -288,6 +292,8 @@ class GameViewModel(
             currentGuessChars = List(wordLength) { null },
             cursorIndex = 0,
             loading = true,
+            user = carriedUser,
+            colorblind = carriedColorblind,
         )
         viewModelScope.launch {
             runCatching {
@@ -311,6 +317,8 @@ class GameViewModel(
                         currentGuessChars = List(resp.wordLength) { null },
                         cursorIndex = 0,
                         loading = false,
+                        user = _state.value.user,
+                        colorblind = _state.value.colorblind,
                     )
                 },
                 onFailure = { e ->
