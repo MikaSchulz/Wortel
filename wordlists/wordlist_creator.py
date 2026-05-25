@@ -44,8 +44,10 @@ import spacy
 # ============================================================
 
 # Mindesthäufigkeit für Aufnahme in die Akzeptanzliste.
-# Quelle ist OpenSubtitles2018-DE — 3000 entspricht "alltagssprachlich gängig".
-MIN_FREQ_VALID = 3000
+# Quelle ist OpenSubtitles2018-DE. 1000 öffnet das Reservoir auf
+# "kommt im Alltag durchaus vor" — der POS+Lemma-Filter siebt das
+# Rauschen danach wieder raus. Mit 3000 blieb zu wenig übrig.
+MIN_FREQ_VALID = 1000
 
 # Anzahl der häufigsten Wörter, die als Rate-Ziel verwendet werden.
 # Kleinere Zahl = bekanntere Lösungen = weniger Spielerfrust.
@@ -208,19 +210,72 @@ def write_debug_txt(words: list[str], length: int, kind: str) -> None:
     path.write_text("\n".join(words) + "\n", encoding="utf-8")
 
 
+def load_nlp() -> "spacy.language.Language":
+    """
+    Lade das beste verfügbare deutsche spaCy-Modell. _md ist deutlich
+    genauer beim POS-Tagging isolierter Wörter als _sm; _lg wenn der
+    Nutzer es installiert hat noch besser. Wir fallen in der Reihenfolge
+    md -> sm zurück und brechen sonst mit Installationshinweis ab.
+    """
+    candidates = ("de_core_news_lg", "de_core_news_md", "de_core_news_sm")
+    for model in candidates:
+        try:
+            print(f"Lade spaCy-Modell: {model}")
+            return spacy.load(model)
+        except OSError:
+            print(f"  {model} nicht installiert.")
+    print("\nFehler: kein deutsches spaCy-Modell verfügbar. Installation:")
+    print("  python -m spacy download de_core_news_md   # empfohlen (~40 MB)")
+    print("  python -m spacy download de_core_news_sm   # minimal (~15 MB)")
+    raise SystemExit(1)
+
+
+def analyze_word(nlp, word: str):
+    """
+    POS-Tag das Wort sowohl klein als auch großgeschrieben.
+
+    Deutsche Substantive werden großgeschrieben — spaCy nutzt das als
+    starkes Signal. Auf isolierten kleingeschriebenen Wörtern (die aus
+    Frequenzlisten typischerweise so kommen) tagged der Parser oft NOUN
+    fälschlich als PROPN oder vergibt das falsche Lemma. Wir hedgen
+    indem wir beide Varianten testen und das Wort durchwinken sobald
+    irgendeine Variante eine erlaubte POS-Klasse UND einen passenden
+    Lemma-Match liefert.
+
+    Rückgabe: spaCy-Token bei Erfolg, sonst None.
+    """
+    variants: list[str] = []
+    lower = word.lower()
+    cap = lower[:1].upper() + lower[1:]
+    # dict.fromkeys statt set, um Reihenfolge zu erhalten und Duplikate
+    # zu vermeiden falls der Capitalize-Trick nichts ändert (z. B. bei
+    # bereits großgeschriebenem ß-führendem Wort).
+    for v in dict.fromkeys([lower, cap]):
+        variants.append(v)
+
+    for variant in variants:
+        doc = nlp(variant)
+        if not doc:
+            continue
+        token = doc[0]
+        if token.pos_ not in ALLOWED_POS:
+            continue
+        # Lemma muss der Eingabe entsprechen — sonst ist es eine
+        # flektierte Form (kleine -> klein, Hunde -> Hund).
+        if token.text.lower() != token.lemma_.lower():
+            continue
+        return token
+    return None
+
+
 # ============================================================
 # MAIN
 # ============================================================
 
 
 def main() -> int:
-    # spaCy-Modell laden — Lemma + POS.
-    try:
-        nlp = spacy.load("de_core_news_sm")
-    except OSError:
-        print("Fehler: deutsches Sprachmodell fehlt. Installation:")
-        print("  python -m spacy download de_core_news_sm")
-        return 1
+    # spaCy-Modell laden — Lemma + POS. Größtes verfügbares zuerst.
+    nlp = load_nlp()
 
     names_blocklist = load_names_blocklist()
 
@@ -271,22 +326,14 @@ def main() -> int:
         if word_lower in PROFANITY_BLOCKLIST:
             continue
 
-        # spaCy braucht den Originalstring — POS-Tagging ist groß-/klein-sensitiv
-        # (Substantive im Deutschen großgeschrieben).
-        doc = nlp(word)
-        if not doc:
-            continue
-        token = doc[0]
-
-        if token.pos_ not in ALLOWED_POS:
+        # POS-Tag mit Capitalization-Hedge: spaCy braucht Großschreibung
+        # für Substantive. Wir testen klein UND groß, akzeptieren wenn
+        # eine Variante einen erlaubten POS-Tag + Lemma-Match liefert.
+        token = analyze_word(nlp, word)
+        if token is None:
             continue
 
-        # Grundform-Check: drop flektierte Formen (kleine, Hunde, stehst).
-        if token.text.lower() != token.lemma_.lower():
-            continue
-
-        # Auch das Lemma sollte nicht auf der Profanity-Liste sein
-        # (z. B. "mord" als Lemma von "morde").
+        # Lemma-Profanity-Check (zusätzlich zum Wort-Check oben).
         if token.lemma_.lower() in PROFANITY_BLOCKLIST:
             continue
 
