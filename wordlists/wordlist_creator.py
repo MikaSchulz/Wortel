@@ -232,39 +232,72 @@ def load_nlp() -> "spacy.language.Language":
 
 def analyze_word(nlp, word: str):
     """
-    POS-Tag das Wort sowohl klein als auch großgeschrieben.
+    POS-Tagging mit Capitalization-Hedge UND Veto durch Lowercase.
 
-    Deutsche Substantive werden großgeschrieben — spaCy nutzt das als
-    starkes Signal. Auf isolierten kleingeschriebenen Wörtern (die aus
-    Frequenzlisten typischerweise so kommen) tagged der Parser oft NOUN
-    fälschlich als PROPN oder vergibt das falsche Lemma. Wir hedgen
-    indem wir beide Varianten testen und das Wort durchwinken sobald
-    irgendeine Variante eine erlaubte POS-Klasse UND einen passenden
-    Lemma-Match liefert.
+    Naiver Cap-Hedge produziert üble False-Positives: "hast" lowercase
+    -> VERB lemma "haben" (richtig erkannt als Konjugation), wird aber
+    "Hast" als seltenes Nomen ("die Hast" = Eile) wieder reingespült.
+    Selbe Falle bei "sage" (-> Sage), "halt" (-> Halt), "eins" (-> Eins),
+    "gehe"/"sehe"/"sieh"/"ging" (alle nur Verbflexionen).
+
+    Strategie: lowercase zuerst befragen. Wenn der eine eindeutige
+    Nicht-Lemma-Form als VERB/AUX taggt -> rejecten (Konjugation).
+    Wenn er eine harte Nicht-Erlaubt-POS taggt (Zahl, Partikel,
+    Pronomen, Determiner, Präposition, Konjunktion) -> rejecten.
+    Nur wenn lowercase ambig/unauffällig ist, ziehen wir die
+    Cap-Variante als Fallback heran — die ist nur fürs Aufpolieren
+    von Substantiven da, die spaCy ohne Großbuchstaben verwirft.
 
     Rückgabe: spaCy-Token bei Erfolg, sonst None.
     """
-    variants: list[str] = []
     lower = word.lower()
     cap = lower[:1].upper() + lower[1:]
-    # dict.fromkeys statt set, um Reihenfolge zu erhalten und Duplikate
-    # zu vermeiden falls der Capitalize-Trick nichts ändert (z. B. bei
-    # bereits großgeschriebenem ß-führendem Wort).
-    for v in dict.fromkeys([lower, cap]):
-        variants.append(v)
 
-    for variant in variants:
-        doc = nlp(variant)
-        if not doc:
-            continue
-        token = doc[0]
-        if token.pos_ not in ALLOWED_POS:
-            continue
-        # Lemma muss der Eingabe entsprechen — sonst ist es eine
-        # flektierte Form (kleine -> klein, Hunde -> Hund).
-        if token.text.lower() != token.lemma_.lower():
-            continue
-        return token
+    # POS-Kategorien, die wir nie als gültiges Wortspiel-Wort akzeptieren,
+    # auch wenn die Cap-Variante etwas anderes behauptet.
+    LOWERCASE_VETO = {
+        "NUM",   # eins, zwei, drei
+        "INTJ",  # naja, hallo, äh
+        "PRON",  # ich, du, wir, mich
+        "DET",   # der, die, das, ein
+        "ADP",   # in, auf, mit, durch
+        "CCONJ", # und, oder, aber
+        "SCONJ", # weil, dass, ob
+        "PART",  # nicht, ja, doch (Modalpartikel)
+        "AUX",   # bin, hast, war, würde — Hilfsverbformen sind nie Lemma
+    }
+
+    doc_low = nlp(lower)
+    t_low = doc_low[0] if doc_low else None
+
+    # 1) Konjugationen: lowercase VERB mit Lemma != Wort -> hart raus.
+    if t_low and t_low.pos_ == "VERB" and t_low.lemma_.lower() != lower:
+        return None
+
+    # 2) Harte Lowercase-Veto-Kategorien.
+    if t_low and t_low.pos_ in LOWERCASE_VETO:
+        return None
+
+    # 3) Lowercase-Akzeptanz: erlaubte POS + Lemma stimmt.
+    if (
+        t_low
+        and t_low.pos_ in ALLOWED_POS
+        and t_low.text.lower() == t_low.lemma_.lower()
+    ):
+        return t_low
+
+    # 4) Fallback Cap-Variante — fischt Substantive ein, die spaCy
+    #    lowercase fälschlich als PROPN/ADV taggt.
+    if cap != lower:
+        doc_cap = nlp(cap)
+        if doc_cap:
+            t_cap = doc_cap[0]
+            if (
+                t_cap.pos_ in ALLOWED_POS
+                and t_cap.text.lower() == t_cap.lemma_.lower()
+            ):
+                return t_cap
+
     return None
 
 
