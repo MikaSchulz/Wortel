@@ -1,75 +1,321 @@
-import urllib.request
+"""
+wordlist_creator.py — Wortel-Wortlisten-Generator.
+
+Pipeline:
+  1. Lade Frequenzliste (hermitdave/FrequencyWords, OpenSubtitles2018 DE).
+  2. Lade Namens-Blocklist (Vor- + Nachnamen aus PenTestical/german_names).
+  3. Filter:
+       - Länge 4-7
+       - nur deutsche Buchstaben (a-zA-Z, Umlaute, ß) — Umlaute werden behalten
+       - keine Eigennamen (Namens-Blocklist)
+       - keine Geo-/sakralen Begriffe
+       - keine Profanität (PROFANITY_BLOCKLIST)
+       - Häufigkeit >= MIN_FREQ_VALID
+  4. POS-Tag via spaCy de_core_news_sm -> behalte NOUN/ADJ/VERB.
+  5. Lemma-Check -> behalte nur Grundformen (kein "stehst", "Hunde",
+     "kleine"; aber "stehen", "Hund", "klein").
+  6. Output pro Länge zwei TS-Module:
+       - solutions_N_letters.ts  -> Top-N häufigste, dienen als Rate-Ziel
+       - words_N_letters.ts      -> Komplette Valid-Liste fürs Akzeptieren
+
+Die Edge Function nutzt SOLUTIONS für randomWord(), beide Sets gemeinsam
+für isValid(). Damit kriegen Spieler bekannte Wörter zu raten, dürfen aber
+seltenere Wörter als Guess eingeben ohne Soft-Reject.
+
+Run:
+    cd wordlists
+    python -m spacy download de_core_news_sm   # einmalig
+    python wordlist_creator.py
+"""
+
+from __future__ import annotations
+
 import re
+import sys
+import urllib.error
+import urllib.request
+from pathlib import Path
 
-# INSERT your own raw GitHub link here
-URL = "https://raw.githubusercontent.com/hermitdave/FrequencyWords/refs/heads/master/content/2018/de/de_full.txt"
+import spacy
 
-# Target dictionary for internal grouping
-word_dictionary = {
-    5: [],
-    6: [],
-    7: []
+
+# ============================================================
+# CONFIG
+# ============================================================
+
+# Mindesthäufigkeit für Aufnahme in die Akzeptanzliste.
+# Quelle ist OpenSubtitles2018-DE — 3000 entspricht "alltagssprachlich gängig".
+MIN_FREQ_VALID = 3000
+
+# Anzahl der häufigsten Wörter, die als Rate-Ziel verwendet werden.
+# Kleinere Zahl = bekanntere Lösungen = weniger Spielerfrust.
+TOP_N_SOLUTIONS = 1500
+
+# Welche Wortlängen wir bauen.
+WORD_LENGTHS = (4, 5, 6, 7)
+
+# Quell-URLs.
+WORDS_URL = (
+    "https://raw.githubusercontent.com/hermitdave/FrequencyWords/"
+    "refs/heads/master/content/2018/de/de_full.txt"
+)
+FIRSTNAMES_URL = (
+    "https://raw.githubusercontent.com/PenTestical/german_names/"
+    "master/2000_german_firstnames.txt"
+)
+SURNAMES_URL = (
+    "https://raw.githubusercontent.com/PenTestical/german_names/"
+    "master/most_common_german_surnames.txt"
+)
+
+# Output-Pfad: TS-Module direkt in das Edge-Function-Bundle schreiben.
+HERE = Path(__file__).resolve().parent
+EDGE_DATA_DIR = (
+    HERE.parent / "supabase" / "functions" / "_shared" / "infrastructure" / "data"
+)
+
+# Optionaler Debug-Output als .txt zum Sichten der generierten Listen.
+DEBUG_TXT_DIR = HERE / "_debug"
+WRITE_DEBUG_TXT = True
+
+
+# ============================================================
+# BLOCKLISTS
+# ============================================================
+
+GEO_BLOCKLIST = {
+    # Städte
+    "berlin", "köln", "bonn", "kiel", "ulm", "trier", "bremen", "mainz",
+    "essen", "gera", "jena", "wien", "zürich", "graz", "linz", "basel",
+    "paris", "rom", "london", "tokio", "moskau", "kairo",
+    # Länder / Regionen
+    "europa", "asien", "afrika", "china", "polen", "italien", "spanien",
+    "bayern", "hessen", "sachsen", "preussen", "preußen",
+    # Religiös
+    "gott", "jesus", "allah", "buddha", "satan", "teufel",
 }
 
-seen = set()
-# Filter for purely alphabetical words (including German umlauts and ß)
-valid_pattern = re.compile(r"^[a-zA-ZäöüÄÖÜß]+$")
+# Profanity-Blocklist. Eintrage als Lemma (Grundform) — die Filter-Pipeline
+# prüft sowohl die Eingabeform als auch die spaCy-Lemma-Ausgabe gegen diese
+# Menge, also fangen wir konjugierte/deklinierte Varianten automatisch.
+# Alle Einträge sind 4-7 Zeichen lang (alles andere greift der Längenfilter
+# ohnehin nicht).
+PROFANITY_BLOCKLIST = {
+    # Sex / Geschlechtsteile
+    "arsch", "fotze", "ficken", "schwanz", "möse", "muschi", "nutte",
+    "hure", "puff", "votze", "pimmel", "titte", "titten", "vulva",
+    "penis", "pussy", "bumsen", "vögeln", "blasen",
+    # Skatologisch
+    "kacke", "kacken", "kotze", "kotzen", "pisse", "pissen",
+    "scheiße", "schiss", "rotzen", "furzen",
+    # Onanie
+    "wichser", "wichsen",
+    # Slurs / Beleidigungen
+    "neger", "kanake", "polacke", "spast", "spasti", "krüppel",
+    "tunte", "trottel", "idiot", "depp",
+    # Sexuelle Orientierung als Slur-Material
+    "schwul", "lesbe", "tucke",
+    # Gewalt / Tod
+    "mord", "morden", "töten", "suizid", "würgen", "amok",
+    "leiche",
+    # Drogen
+    "heroin", "kokain", "koks", "kiffen", "saufen",
+    # NS-Bezug / historisch belastet
+    "nazi", "hitler", "stasi", "ghetto", "rasse",
+    # Religion (Solution-untauglich für säkulares Wortspiel)
+    "allah", "satan", "teufel", "jesus",
+    # Misc Tabuthemen
+    "krebs", "tumor", "aids", "sucht", "knast", "henker",
+}
 
-print("Fetching wordlist from GitHub and starting filtration...")
+VALID_CHAR_RE = re.compile(r"^[a-zA-ZäöüÄÖÜß]+$")
+ALLOWED_POS = {"NOUN", "ADJ", "VERB"}
 
-try:
-    # Send request with a User-Agent to prevent GitHub from blocking the download
-    req = urllib.request.Request(URL, headers={'User-Agent': 'Mozilla/5.0'})
+
+# ============================================================
+# HELPERS
+# ============================================================
+
+
+def fetch_lines(url: str) -> list[str]:
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     with urllib.request.urlopen(req) as response:
-        raw_content = response.read().decode('utf-8')
-        lines = raw_content.splitlines()
+        raw = response.read()
+    try:
+        return raw.decode("utf-8").splitlines()
+    except UnicodeDecodeError:
+        return raw.decode("latin-1").splitlines()
 
-    for line in lines:
+
+def load_names_blocklist() -> set[str]:
+    names: set[str] = set(GEO_BLOCKLIST)
+    print("Lade Namenslisten für Eigennamen-Blocklist...")
+    try:
+        for line in fetch_lines(FIRSTNAMES_URL):
+            name = line.strip()
+            if name:
+                names.add(name.lower())
+
+        for line in fetch_lines(SURNAMES_URL):
+            name = line.strip()
+            # Nur original großgeschriebene Einträge als Nachnamen werten.
+            # Verhindert, dass Wörter wie "klein", "lang", "schwarz" rausfliegen,
+            # nur weil sie auch als Nachname existieren.
+            if name and name[0].isupper():
+                names.add(name.lower())
+    except Exception as exc:  # noqa: BLE001
+        print(f"Warnung: Namenslisten-Download fehlgeschlagen ({exc}). "
+              "Nur Basis-Blocklist aktiv.")
+    print(f"  -> {len(names)} Einträge.")
+    return names
+
+
+def write_ts_module(words: list[str], length: int, kind: str) -> Path:
+    """
+    kind = "valid"     -> exportiert WORDS_{length}
+    kind = "solutions" -> exportiert SOLUTIONS_{length}
+    """
+    if kind == "valid":
+        var_name = f"WORDS_{length}"
+        filename = f"words_{length}_letters.ts"
+    elif kind == "solutions":
+        var_name = f"SOLUTIONS_{length}"
+        filename = f"solutions_{length}_letters.ts"
+    else:
+        raise ValueError(f"Unknown kind: {kind}")
+
+    EDGE_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    path = EDGE_DATA_DIR / filename
+
+    lines: list[str] = [
+        "// Auto-generated by wordlists/wordlist_creator.py. Do not edit by hand.",
+        "// Regenerate: cd wordlists && python wordlist_creator.py",
+        "",
+        f"export const {var_name}: readonly string[] = [",
+    ]
+    lines.extend(f'  "{w}",' for w in words)
+    lines.append("];")
+    lines.append("")
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
+def write_debug_txt(words: list[str], length: int, kind: str) -> None:
+    if not WRITE_DEBUG_TXT:
+        return
+    DEBUG_TXT_DIR.mkdir(parents=True, exist_ok=True)
+    path = DEBUG_TXT_DIR / f"{kind}_{length}_letters.txt"
+    path.write_text("\n".join(words) + "\n", encoding="utf-8")
+
+
+# ============================================================
+# MAIN
+# ============================================================
+
+
+def main() -> int:
+    # spaCy-Modell laden — Lemma + POS.
+    try:
+        nlp = spacy.load("de_core_news_sm")
+    except OSError:
+        print("Fehler: deutsches Sprachmodell fehlt. Installation:")
+        print("  python -m spacy download de_core_news_sm")
+        return 1
+
+    names_blocklist = load_names_blocklist()
+
+    print("\nLade Frequenzliste...")
+    try:
+        raw_lines = fetch_lines(WORDS_URL)
+    except urllib.error.HTTPError as exc:
+        print(f"Fehler beim Download der Wortliste: HTTP {exc.code}")
+        return 1
+    print(f"  -> {len(raw_lines)} Einträge.")
+
+    # Sammle pro Länge bereits frequenzabsteigend (Quelle ist so sortiert).
+    by_length: dict[int, list[str]] = {n: [] for n in WORD_LENGTHS}
+    seen: set[str] = set()
+
+    print("\nFilter + POS-Tagging (das kann ein paar Minuten dauern)...")
+    processed = 0
+    for line in raw_lines:
+        processed += 1
+        if processed % 25_000 == 0:
+            print(f"  ... {processed} Zeilen verarbeitet")
+
         parts = line.strip().split()
         if len(parts) < 2:
             continue
 
         word = parts[0]
-
-        # Extract the frequency from the second column
         try:
-            frequency = int(parts[1])
+            freq = int(parts[1])
         except ValueError:
             continue
 
-        # FILTER 1: Frequency must be at least 100
-        if frequency < 100:
-            # If your GitHub list is strictly sorted from highest to lowest frequency,
-            # you can change 'continue' to 'break' here to speed up the script.
+        # Frequenzliste ist absteigend sortiert -> früh abbrechen sobald
+        # wir unter die Schwelle fallen.
+        if freq < MIN_FREQ_VALID:
+            break
+
+        if len(word) not in WORD_LENGTHS:
+            continue
+        if not VALID_CHAR_RE.match(word):
             continue
 
-        word_length = len(word)
+        word_lower = word.lower()
+        if word_lower in seen:
+            continue
+        if word_lower in names_blocklist:
+            continue
+        if word_lower in PROFANITY_BLOCKLIST:
+            continue
 
-        # FILTER 2 & 3: Exact length (5-7) and clean text without special characters
-        if 5 <= word_length <= 7 and valid_pattern.match(word):
-            word_lower = word.lower()
+        # spaCy braucht den Originalstring — POS-Tagging ist groß-/klein-sensitiv
+        # (Substantive im Deutschen großgeschrieben).
+        doc = nlp(word)
+        if not doc:
+            continue
+        token = doc[0]
 
-            # Prevent duplicates caused by different casing
-            if word_lower not in seen:
-                seen.add(word_lower)
-                word_dictionary[word_length].append(word)
+        if token.pos_ not in ALLOWED_POS:
+            continue
 
-    # --- EXPORT AS SEPARATE FILES ---
-    print("\nCreating separate export files...")
+        # Grundform-Check: drop flektierte Formen (kleine, Hunde, stehst).
+        if token.text.lower() != token.lemma_.lower():
+            continue
 
-    for length, words in word_dictionary.items():
-        # Dynamic filename based on word length
-        output_filename = f"words_{length}_letters.txt"
+        # Auch das Lemma sollte nicht auf der Profanity-Liste sein
+        # (z. B. "mord" als Lemma von "morde").
+        if token.lemma_.lower() in PROFANITY_BLOCKLIST:
+            continue
 
-        with open(output_filename, "w", encoding="utf-8") as f:
-            # Write words separated by a newline
-            f.write("\n".join(words))
+        seen.add(word_lower)
+        by_length[len(word)].append(word_lower)
 
-        print(f"-> '{output_filename}' successfully created ({len(words)} words).")
+    total = sum(len(v) for v in by_length.values())
+    print(f"\nAkzeptiert: {total} Wörter über alle Längen.\n")
 
-    print("\nDone! All files have been saved to your current directory.")
+    print("Schreibe TS-Module + Debug-Output...")
+    for length in WORD_LENGTHS:
+        valid_words = by_length[length]
+        solutions = valid_words[:TOP_N_SOLUTIONS]
 
-except urllib.error.HTTPError as e:
-    print(f"Error downloading from GitHub (HTTP Error {e.code}). Is the URL correct and the repo public?")
-except Exception as e:
-    print(f"An error occurred: {e}")
+        write_ts_module(valid_words, length, "valid")
+        write_ts_module(solutions, length, "solutions")
+        write_debug_txt(valid_words, length, "valid")
+        write_debug_txt(solutions, length, "solutions")
+
+        print(
+            f"  Länge {length}: "
+            f"{len(valid_words)} valid / {len(solutions)} solutions"
+        )
+
+    print(f"\nFertig. TS-Module in {EDGE_DATA_DIR}")
+    if WRITE_DEBUG_TXT:
+        print(f"Debug-TXT in {DEBUG_TXT_DIR}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
