@@ -7,14 +7,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.focusable
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -50,8 +48,6 @@ fun GameScreen(
     onTileClick: (Int) -> Unit,
     onToggleColorblind: () -> Unit,
     onRequestHint: () -> Unit,
-    onApplyHint: () -> Unit,
-    onClearHint: () -> Unit,
     @Suppress("UNUSED_PARAMETER") onClearError: () -> Unit,
 ) {
     // Capture physical-keyboard input (desktop browser, hardware kb on Android
@@ -184,43 +180,6 @@ fun GameScreen(
             }
         }
 
-        // Hint dialog — modal so the player explicitly decides whether
-        // to spend an attempt on the suggestion. "Übernehmen" stuffs the
-        // word into the active row and submits it like a real guess.
-        // "Abbrechen" just dismisses and the player keeps their attempt.
-        val hint = state.hint
-        if (hint != null) {
-            AlertDialog(
-                onDismissRequest = onClearHint,
-                title = { Text("Tipp") },
-                text = {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            "Diesen Versuch absenden?",
-                            fontSize = 14.sp,
-                        )
-                        Text(
-                            hint.uppercase(),
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 32.sp,
-                        )
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        onApplyHint()
-                        refocus()
-                    }) { Text("Übernehmen") }
-                },
-                dismissButton = {
-                    TextButton(onClick = {
-                        onClearHint()
-                        refocus()
-                    }) { Text("Abbrechen") }
-                },
-            )
-        }
     }
 }
 

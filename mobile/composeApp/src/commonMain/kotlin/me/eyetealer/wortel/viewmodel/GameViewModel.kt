@@ -82,14 +82,10 @@ data class GameUiState(
      */
     val user: UserState = UserState.SignedOut,
     /**
-     * Hint word returned by the server, displayed in a dialog. null when
-     * no hint is currently being shown. Cleared by dismissing the dialog
-     * or by starting a new game.
-     */
-    val hint: String? = null,
-    /**
      * True while a hint request is in flight — drives the spinner on the
-     * hint button so the user knows the tap registered.
+     * hint button so the user knows the tap registered. The hint itself
+     * is consumed immediately as a guess; there is no intermediate state
+     * where the player has seen a hint and can still back out.
      */
     val hintLoading: Boolean = false,
 ) {
@@ -490,70 +486,47 @@ class GameViewModel(
     }
 
     /**
-     * Ask the server for a hint word. Hint is stored in state.hint so
-     * the UI can show it in a dialog. The actual decision logic lives
-     * server-side because that's where the secret word + the full valid
-     * word list are; the client just renders what comes back.
+     * Ask the server for a hint word AND immediately submit it as the
+     * player's next attempt. No intermediate dialog, no opt-out.
+     *
+     * The motivation is anti-exploit: if the UI surfaced the hint word
+     * for inspection first, the player could read it, dismiss the
+     * dialog without spending an attempt, then type something else
+     * using the leaked information. Forcing the hint to land as a real
+     * guess means the cost (one attempt slot) and the information are
+     * inseparable.
      */
     fun requestHint() {
         val gameId = _state.value.gameId ?: return
         if (_state.value.status != GameStatus.RUNNING) return
         if (_state.value.hintLoading) return
-        _state.update { it.copy(hintLoading = true) }
+        if (_state.value.loading) return
+        _state.update { it.copy(hintLoading = true, error = null) }
         viewModelScope.launch {
             runCatching { games.requestHint(gameId) }.fold(
                 onSuccess = { resp ->
-                    _state.update {
-                        it.copy(hint = resp.hint, hintLoading = false)
-                    }
-                },
-                onFailure = { e ->
+                    val chars: List<Char?> = resp.hint.lowercase().toList()
                     _state.update {
                         it.copy(
                             hintLoading = false,
-                            error = e.toMessage(),
+                            currentGuessChars = chars,
+                            cursorIndex = (resp.hint.length - 1)
+                                .coerceAtLeast(0),
+                            error = null,
                         )
+                    }
+                    // Submit immediately via the regular pipeline so
+                    // animation, persistence, and WON/LOST evaluation
+                    // behave like a hand-typed guess.
+                    onSubmit()
+                },
+                onFailure = { e ->
+                    _state.update {
+                        it.copy(hintLoading = false, error = e.toMessage())
                     }
                 },
             )
         }
-    }
-
-    fun clearHint() {
-        _state.update { it.copy(hint = null) }
-    }
-
-    /**
-     * Accept the hint as if the player had typed and submitted it.
-     *
-     * Stuffs the hint letters into the active row and then routes through
-     * the regular submit pipeline, so the hint consumes a real attempt
-     * and contributes to the WON/LOST evaluation. The board animates the
-     * reveal exactly as it would for a manually entered guess.
-     */
-    fun applyHint() {
-        val hint = _state.value.hint ?: return
-        val gameId = _state.value.gameId ?: return
-        if (_state.value.status != GameStatus.RUNNING) return
-        val chars: List<Char?> = hint.lowercase().toList()
-        _state.update {
-            it.copy(
-                hint = null,
-                currentGuessChars = chars,
-                cursorIndex = (hint.length - 1).coerceAtLeast(0),
-                error = null,
-            )
-        }
-        // Re-use the existing submit flow so loading state, error mapping
-        // and animations stay identical to a hand-typed guess. We don't
-        // call onSubmit() directly to avoid the local-validation shake
-        // path; the hint length is guaranteed by the server to match,
-        // and we want failures (network etc.) to flow through the same
-        // error handling as a normal submit.
-        onSubmit()
-        // Note: gameId is captured for tests/debug clarity but onSubmit
-        // also reads it from state.
-        @Suppress("UNUSED_EXPRESSION") gameId
     }
 
     /** Flip the colorblind palette and persist it. */
