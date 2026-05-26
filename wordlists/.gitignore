@@ -1,0 +1,5 @@
+_cache/
+_debug/
+_test/
+__pycache__/
+*.pyc
