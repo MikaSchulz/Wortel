@@ -404,6 +404,14 @@ class GameViewModel(
         val current = _state.value
         if (current.gameId == null) return
         if (current.status != GameStatus.RUNNING) return
+        // Auto-repeat on a held physical Enter key fires onSubmit multiple
+        // times before the first round-trip completes. Without these guards
+        // every repeat fired its own POST /guesses; the player burned
+        // through every remaining attempt with the same word and lost the
+        // game before the first response even came back. Refuse to submit
+        // while another submit OR a hint request is in flight.
+        if (current.loading) return
+        if (current.hintLoading) return
         if (!current.isCurrentGuessComplete) {
             // Local validation failure — shake immediately, no server roundtrip.
             _state.update {
@@ -414,8 +422,12 @@ class GameViewModel(
             }
             return
         }
+        // Flip loading SYNCHRONOUSLY so the next onSubmit invocation (e.g.
+        // from the next auto-repeat tick) sees it immediately. Putting the
+        // update inside the coroutine left a race window where two
+        // submits could enter the launch block back-to-back.
+        _state.update { it.copy(loading = true, error = null) }
         viewModelScope.launch {
-            _state.update { it.copy(loading = true, error = null) }
             runCatching { games.submitGuess(current.gameId, current.currentGuess) }
                 .fold(
                     onSuccess = { resp ->
