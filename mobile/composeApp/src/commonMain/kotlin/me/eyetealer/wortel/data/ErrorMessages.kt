@@ -19,6 +19,7 @@ object ErrorMessages {
         "INVALID_INPUT" -> "Ungültige Eingabe."
         "CONCURRENCY" -> "Konflikt — bitte erneut versuchen."
         "INTERNAL" -> "Serverfehler — bitte später erneut versuchen."
+        "NO_HINT_AVAILABLE" -> "Kein Tipp möglich — versuch's mit einem Rateversuch."
         else -> fallback
     }
 }

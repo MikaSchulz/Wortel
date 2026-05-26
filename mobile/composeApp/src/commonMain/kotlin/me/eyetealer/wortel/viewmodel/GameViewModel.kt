@@ -81,6 +81,17 @@ data class GameUiState(
      * can prompt them to upgrade to a real account.
      */
     val user: UserState = UserState.SignedOut,
+    /**
+     * Hint word returned by the server, displayed in a dialog. null when
+     * no hint is currently being shown. Cleared by dismissing the dialog
+     * or by starting a new game.
+     */
+    val hint: String? = null,
+    /**
+     * True while a hint request is in flight — drives the spinner on the
+     * hint button so the user knows the tap registered.
+     */
+    val hintLoading: Boolean = false,
 ) {
     /** Stringified guess for sending to the server. Empty slots become ''. */
     val currentGuess: String
@@ -476,6 +487,40 @@ class GameViewModel(
 
     fun clearError() {
         _state.update { it.copy(error = null) }
+    }
+
+    /**
+     * Ask the server for a hint word. Hint is stored in state.hint so
+     * the UI can show it in a dialog. The actual decision logic lives
+     * server-side because that's where the secret word + the full valid
+     * word list are; the client just renders what comes back.
+     */
+    fun requestHint() {
+        val gameId = _state.value.gameId ?: return
+        if (_state.value.status != GameStatus.RUNNING) return
+        if (_state.value.hintLoading) return
+        _state.update { it.copy(hintLoading = true) }
+        viewModelScope.launch {
+            runCatching { games.requestHint(gameId) }.fold(
+                onSuccess = { resp ->
+                    _state.update {
+                        it.copy(hint = resp.hint, hintLoading = false)
+                    }
+                },
+                onFailure = { e ->
+                    _state.update {
+                        it.copy(
+                            hintLoading = false,
+                            error = e.toMessage(),
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    fun clearHint() {
+        _state.update { it.copy(hint = null) }
     }
 
     /** Flip the colorblind palette and persist it. */

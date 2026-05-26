@@ -12,6 +12,7 @@ const STATUS_BY_CODE: Record<DomainErrorCode, number> = {
   INVALID_MAX_ATTEMPTS: 400,
   SECRET_LENGTH_MISMATCH: 500,
   INVALID_INPUT: 400,
+  NO_HINT_AVAILABLE: 422,
 };
 
 /**

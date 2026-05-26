@@ -85,6 +85,59 @@ object WortelIcons {
         }
     }
 
+    /**
+     * Lightbulb glyph for the hint button. A round bulb on top, two short
+     * lines for the base (screw threads), and a tiny filament inside.
+     * Stroked-only so it stays readable in both palettes via LocalContentColor.
+     */
+    @Composable
+    fun Lightbulb(size: Dp = 24.dp, modifier: Modifier = Modifier) {
+        val color = LocalContentColor.current
+        Canvas(modifier.size(size)) {
+            val w = this.size.width
+            val h = this.size.height
+            val stroke = w * 0.09f
+            // Bulb (circle), upper ~60% of the icon
+            val bulbR = w * 0.30f
+            val bulbCx = w / 2f
+            val bulbCy = h * 0.38f
+            drawCircle(
+                color = color,
+                radius = bulbR,
+                center = Offset(bulbCx, bulbCy),
+                style = Stroke(width = stroke),
+            )
+            // Base — two horizontal lines below the bulb
+            val baseW = w * 0.30f
+            val baseLeft = w / 2f - baseW / 2f
+            val baseRight = w / 2f + baseW / 2f
+            val baseY1 = h * 0.74f
+            val baseY2 = h * 0.86f
+            drawLine(
+                color = color,
+                start = Offset(baseLeft, baseY1),
+                end = Offset(baseRight, baseY1),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
+            )
+            drawLine(
+                color = color,
+                start = Offset(baseLeft + w * 0.04f, baseY2),
+                end = Offset(baseRight - w * 0.04f, baseY2),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
+            )
+            // Tiny vertical filament
+            drawLine(
+                color = color,
+                start = Offset(bulbCx, bulbCy - bulbR * 0.5f),
+                end = Offset(bulbCx, bulbCy + bulbR * 0.4f),
+                strokeWidth = stroke * 0.7f,
+                cap = StrokeCap.Round,
+            )
+        }
+    }
+
     @Composable
     fun Backspace(size: Dp = 24.dp, modifier: Modifier = Modifier) {
         val color = LocalContentColor.current

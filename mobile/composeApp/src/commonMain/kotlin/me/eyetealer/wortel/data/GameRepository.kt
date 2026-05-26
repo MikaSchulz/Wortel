@@ -47,6 +47,9 @@ class GameRepository(private val supabase: Supabase = Supabase) {
     suspend fun submitGuess(id: String, guess: String): GameStateResponse =
         request(HttpMethod.Post, "games/$id/guesses", GuessRequest(guess))
 
+    suspend fun requestHint(id: String): HintResponse =
+        request(HttpMethod.Post, "games/$id/hint", body = null as Unit?)
+
     private suspend inline fun <reified Req : Any, reified Res> request(
         method: HttpMethod,
         path: String,

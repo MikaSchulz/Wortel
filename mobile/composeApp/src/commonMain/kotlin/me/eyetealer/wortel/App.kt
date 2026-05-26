@@ -84,6 +84,8 @@ fun App() {
                 },
                 onTileClick = vm::onTileClick,
                 onToggleColorblind = vm::toggleColorblind,
+                onRequestHint = vm::requestHint,
+                onClearHint = vm::clearHint,
                 onClearError = vm::clearError,
             )
         }

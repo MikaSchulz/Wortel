@@ -11,7 +11,8 @@ export type DomainErrorCode =
   | "INVALID_WORD_LENGTH"
   | "INVALID_MAX_ATTEMPTS"
   | "SECRET_LENGTH_MISMATCH"
-  | "INVALID_INPUT";
+  | "INVALID_INPUT"
+  | "NO_HINT_AVAILABLE";
 
 export class DomainError extends Error {
   constructor(

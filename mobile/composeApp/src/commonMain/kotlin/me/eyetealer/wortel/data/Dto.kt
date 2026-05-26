@@ -41,3 +41,6 @@ data class GameStateResponse(
 
 @Serializable
 data class ApiError(val error: String, val code: String? = null)
+
+@Serializable
+data class HintResponse(val hint: String)

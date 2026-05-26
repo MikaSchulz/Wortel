@@ -79,4 +79,16 @@ export class BundledWordRepository implements WordRepository {
     const set = VALID_BY_LENGTH.get(normalized.length);
     return Promise.resolve(set?.has(normalized) ?? false);
   }
+
+  /**
+   * Full pool of accepted words for the given length. Used by the hint
+   * generator. We materialise to an Array so callers (which need indexed
+   * access for random sampling and filter chains) don't have to wrangle
+   * the Set form.
+   */
+  wordsForLength(length: number): Promise<readonly string[]> {
+    const entries = WORDS_BY_LENGTH.get(length);
+    if (!entries) return Promise.resolve([]);
+    return Promise.resolve(entries.map(([w]) => w));
+  }
 }

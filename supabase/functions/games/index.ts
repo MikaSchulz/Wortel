@@ -4,6 +4,7 @@
 //   POST   /games                 -> create a new freestyle game
 //   GET    /games/:id             -> fetch game state
 //   POST   /games/:id/guesses     -> submit a guess
+//   POST   /games/:id/hint        -> ask for a hint word
 //   GET    /games/daily           -> today's daily challenge metadata
 //   POST   /games/daily           -> play today's daily (idempotent)
 //
@@ -12,6 +13,7 @@
 
 import { CreateGame } from "../_shared/application/CreateGame.ts";
 import { GetGame } from "../_shared/application/GetGame.ts";
+import { GetHint } from "../_shared/application/GetHint.ts";
 import { PlayDailyChallenge } from "../_shared/application/PlayDailyChallenge.ts";
 import { SubmitGuess } from "../_shared/application/SubmitGuess.ts";
 import { todayUtc } from "../_shared/domain/daily/DailyChallenge.ts";
@@ -45,6 +47,7 @@ interface Wiring {
   create: CreateGame;
   get: GetGame;
   guess: SubmitGuess;
+  hint: GetHint;
   daily: PlayDailyChallenge;
   dailyRepo: SupabaseDailyChallengeRepository;
   words: BundledWordRepository;
@@ -61,6 +64,7 @@ function useCases(): Wiring {
     create: new CreateGame(games, words),
     get: new GetGame(games),
     guess: new SubmitGuess(games, words),
+    hint: new GetHint(games, words),
     daily: new PlayDailyChallenge(dailyRepo, words),
     dailyRepo,
     words,
@@ -100,6 +104,10 @@ Deno.serve(async (req) => {
     if (req.method === "POST" && tail.length === 2 && tail[1] === "guesses") {
       return await handleGuess(req, tail[0]);
     }
+    // POST /games/{uuid}/hint
+    if (req.method === "POST" && tail.length === 2 && tail[1] === "hint") {
+      return await handleHint(req, tail[0]);
+    }
     return errorResponse(req, 404, "Route not found");
   } catch (e) {
     return mapErrorToResponse(req, e);
@@ -133,6 +141,13 @@ async function handleGuess(req: Request, id: string): Promise<Response> {
   // game state plus a `rejectedGuess` marker. Real errors (forbidden, not
   // found, game ended) still throw and surface as 4xx via mapErrorToResponse.
   return jsonResponse(req, toGameStateResponse(result.game, result.rejection));
+}
+
+async function handleHint(req: Request, id: string): Promise<Response> {
+  assertUuid(id);
+  const userId = await getUserId(req);
+  const result = await useCases().hint.execute({ gameId: id, userId });
+  return jsonResponse(req, { hint: result.hint });
 }
 
 async function handleDailyMeta(req: Request): Promise<Response> {

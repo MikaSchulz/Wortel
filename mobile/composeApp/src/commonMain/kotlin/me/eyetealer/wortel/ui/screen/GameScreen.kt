@@ -5,13 +5,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.focusable
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -46,6 +49,8 @@ fun GameScreen(
     onNewGame: () -> Unit,
     onTileClick: (Int) -> Unit,
     onToggleColorblind: () -> Unit,
+    onRequestHint: () -> Unit,
+    onClearHint: () -> Unit,
     @Suppress("UNUSED_PARAMETER") onClearError: () -> Unit,
 ) {
     // Capture physical-keyboard input (desktop browser, hardware kb on Android
@@ -69,6 +74,7 @@ fun GameScreen(
     val onSubmitFocused: () -> Unit = { onSubmit(); refocus() }
     val onTileClickFocused: (Int) -> Unit = { i -> onTileClick(i); refocus() }
     val onToggleColorblindFocused: () -> Unit = { onToggleColorblind(); refocus() }
+    val onRequestHintFocused: () -> Unit = { onRequestHint(); refocus() }
 
     Scaffold(
         topBar = {
@@ -81,6 +87,22 @@ fun GameScreen(
                 },
                 title = { Text("Wortel") },
                 actions = {
+                    // Hint only makes sense while the game is still running.
+                    if (state.status == GameStatus.RUNNING) {
+                        IconButton(
+                            onClick = onRequestHintFocused,
+                            enabled = !state.hintLoading,
+                        ) {
+                            if (state.hintLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            } else {
+                                WortelIcons.Lightbulb()
+                            }
+                        }
+                    }
                     IconButton(onClick = onToggleColorblindFocused) {
                         WortelIcons.Eye()
                     }
@@ -159,6 +181,33 @@ fun GameScreen(
                     CircularProgressIndicator()
                 }
             }
+        }
+
+        // Hint dialog — modal so the player explicitly acknowledges the
+        // tip before continuing. Server picked the word; we just display.
+        val hint = state.hint
+        if (hint != null) {
+            AlertDialog(
+                onDismissRequest = onClearHint,
+                title = { Text("Tipp") },
+                text = {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            "Probier es mit:",
+                            fontSize = 14.sp,
+                        )
+                        Text(
+                            hint.uppercase(),
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 32.sp,
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = onClearHint) { Text("OK") }
+                },
+            )
         }
     }
 }
