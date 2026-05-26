@@ -58,9 +58,16 @@ class AuthRepository(private val client: Supabase = Supabase) {
      * Kick off a browser-side OAuth redirect to Google. The function returns
      * immediately; Supabase handles the callback on the way back and the
      * session shows up in [observeUser] after the redirect completes.
+     *
+     * On web we pass the current origin + path explicitly so the OAuth
+     * callback lands the user back at e.g. /Wortel/ (and not the GitHub
+     * Pages root /). The SDK's default behaviour can collapse to the
+     * Site URL configured in Supabase, which strips the path on
+     * sub-path-hosted apps. Native targets return null here and rely on
+     * their own deep-link wiring.
      */
     suspend fun signInWithGoogle() {
-        client.client.auth.signInWith(Google)
+        client.client.auth.signInWith(Google, redirectUrl = currentAppUrl())
     }
 
     /** Anonymous "guest" mode — gets a stable user_id without an email. */
