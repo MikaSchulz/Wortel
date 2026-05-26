@@ -50,6 +50,7 @@ fun GameScreen(
     onTileClick: (Int) -> Unit,
     onToggleColorblind: () -> Unit,
     onRequestHint: () -> Unit,
+    onApplyHint: () -> Unit,
     onClearHint: () -> Unit,
     @Suppress("UNUSED_PARAMETER") onClearError: () -> Unit,
 ) {
@@ -183,8 +184,10 @@ fun GameScreen(
             }
         }
 
-        // Hint dialog — modal so the player explicitly acknowledges the
-        // tip before continuing. Server picked the word; we just display.
+        // Hint dialog — modal so the player explicitly decides whether
+        // to spend an attempt on the suggestion. "Übernehmen" stuffs the
+        // word into the active row and submits it like a real guess.
+        // "Abbrechen" just dismisses and the player keeps their attempt.
         val hint = state.hint
         if (hint != null) {
             AlertDialog(
@@ -193,7 +196,7 @@ fun GameScreen(
                 text = {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            "Probier es mit:",
+                            "Diesen Versuch absenden?",
                             fontSize = 14.sp,
                         )
                         Text(
@@ -205,7 +208,16 @@ fun GameScreen(
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = onClearHint) { Text("OK") }
+                    TextButton(onClick = {
+                        onApplyHint()
+                        refocus()
+                    }) { Text("Übernehmen") }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        onClearHint()
+                        refocus()
+                    }) { Text("Abbrechen") }
                 },
             )
         }

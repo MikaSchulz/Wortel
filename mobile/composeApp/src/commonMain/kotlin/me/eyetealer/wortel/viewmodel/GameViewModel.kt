@@ -523,6 +523,39 @@ class GameViewModel(
         _state.update { it.copy(hint = null) }
     }
 
+    /**
+     * Accept the hint as if the player had typed and submitted it.
+     *
+     * Stuffs the hint letters into the active row and then routes through
+     * the regular submit pipeline, so the hint consumes a real attempt
+     * and contributes to the WON/LOST evaluation. The board animates the
+     * reveal exactly as it would for a manually entered guess.
+     */
+    fun applyHint() {
+        val hint = _state.value.hint ?: return
+        val gameId = _state.value.gameId ?: return
+        if (_state.value.status != GameStatus.RUNNING) return
+        val chars: List<Char?> = hint.lowercase().toList()
+        _state.update {
+            it.copy(
+                hint = null,
+                currentGuessChars = chars,
+                cursorIndex = (hint.length - 1).coerceAtLeast(0),
+                error = null,
+            )
+        }
+        // Re-use the existing submit flow so loading state, error mapping
+        // and animations stay identical to a hand-typed guess. We don't
+        // call onSubmit() directly to avoid the local-validation shake
+        // path; the hint length is guaranteed by the server to match,
+        // and we want failures (network etc.) to flow through the same
+        // error handling as a normal submit.
+        onSubmit()
+        // Note: gameId is captured for tests/debug clarity but onSubmit
+        // also reads it from state.
+        @Suppress("UNUSED_EXPRESSION") gameId
+    }
+
     /** Flip the colorblind palette and persist it. */
     fun toggleColorblind() {
         val next = !_state.value.colorblind

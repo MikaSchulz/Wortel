@@ -85,6 +85,7 @@ fun App() {
                 onTileClick = vm::onTileClick,
                 onToggleColorblind = vm::toggleColorblind,
                 onRequestHint = vm::requestHint,
+                onApplyHint = vm::applyHint,
                 onClearHint = vm::clearHint,
                 onClearError = vm::clearError,
             )
