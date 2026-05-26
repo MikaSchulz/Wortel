@@ -22,6 +22,9 @@ class FakeWords implements WordRepository {
   isValid(): Promise<boolean> {
     return Promise.resolve(true);
   }
+  wordsForLength(): Promise<readonly string[]> {
+    return Promise.resolve([]);
+  }
 }
 
 class InMemoryDaily implements DailyChallengeRepository {

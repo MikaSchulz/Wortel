@@ -24,6 +24,9 @@ class FakeWordRepository implements WordRepository {
   isValid(word: string): Promise<boolean> {
     return Promise.resolve(!this.invalidWords.has(word.toLowerCase()));
   }
+  wordsForLength(_length: number): Promise<readonly string[]> {
+    return Promise.resolve([]);
+  }
 }
 
 class InMemoryGameRepository implements GameRepository {
