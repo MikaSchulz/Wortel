@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.focusable
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
@@ -45,6 +46,7 @@ fun GameScreen(
     onBackspace: () -> Unit,
     onSubmit: () -> Unit,
     onNewGame: () -> Unit,
+    onPlayAgain: () -> Unit,
     onTileClick: (Int) -> Unit,
     onToggleColorblind: () -> Unit,
     onRequestHint: () -> Unit,
@@ -72,6 +74,7 @@ fun GameScreen(
     val onTileClickFocused: (Int) -> Unit = { i -> onTileClick(i); refocus() }
     val onToggleColorblindFocused: () -> Unit = { onToggleColorblind(); refocus() }
     val onRequestHintFocused: () -> Unit = { onRequestHint(); refocus() }
+    val onPlayAgainFocused: () -> Unit = { onPlayAgain(); refocus() }
 
     Scaffold(
         topBar = {
@@ -152,13 +155,15 @@ fun GameScreen(
                 )
 
                 when (state.status) {
-                    GameStatus.WON -> StatusBanner(
+                    GameStatus.WON -> EndOfGamePanel(
                         title = "Gewonnen!",
                         subtitle = "${state.attempts.size}/${state.maxAttempts} Versuche",
+                        onPlayAgain = onPlayAgainFocused,
                     )
-                    GameStatus.LOST -> StatusBanner(
+                    GameStatus.LOST -> EndOfGamePanel(
                         title = "Verloren",
                         subtitle = "Lösung: ${state.secretWord?.uppercase() ?: "—"}",
+                        onPlayAgain = onPlayAgainFocused,
                     )
                     GameStatus.RUNNING -> {}
                 }
@@ -186,8 +191,15 @@ fun GameScreen(
 private val GERMAN_UMLAUTS = setOf('ä', 'ö', 'ü', 'ß')
 
 @Composable
-private fun StatusBanner(title: String, subtitle: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+private fun EndOfGamePanel(
+    title: String,
+    subtitle: String,
+    onPlayAgain: () -> Unit,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         Text(
             title,
             color = MaterialTheme.colorScheme.primary,
@@ -199,5 +211,8 @@ private fun StatusBanner(title: String, subtitle: String) {
             color = MaterialTheme.colorScheme.onBackground,
             fontSize = 14.sp,
         )
+        Button(onClick = onPlayAgain) {
+            Text("Neues Spiel", fontSize = 16.sp)
+        }
     }
 }

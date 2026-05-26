@@ -82,6 +82,17 @@ fun App() {
                     intentToStartGame = false
                     vm.goHome()
                 },
+                onPlayAgain = {
+                    // Same length + maxAttempts as the finished game.
+                    // intentToStartGame keeps the Game screen mounted
+                    // synchronously while the create-game POST is in
+                    // flight, so we don't flash the Home screen.
+                    intentToStartGame = true
+                    vm.startNewGame(
+                        wordLength = state.wordLength,
+                        maxAttempts = state.maxAttempts,
+                    )
+                },
                 onTileClick = vm::onTileClick,
                 onToggleColorblind = vm::toggleColorblind,
                 onRequestHint = vm::requestHint,
