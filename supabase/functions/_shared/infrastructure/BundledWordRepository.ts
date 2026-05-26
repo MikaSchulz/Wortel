@@ -81,14 +81,17 @@ export class BundledWordRepository implements WordRepository {
   }
 
   /**
-   * Full pool of accepted words for the given length. Used by the hint
-   * generator. We materialise to an Array so callers (which need indexed
-   * access for random sampling and filter chains) don't have to wrangle
-   * the Set form.
+   * Word + Zipf pool for the given length. Returned tuples are the
+   * generator's [word, zipf] pairs straight from the bundle; the
+   * solutionEligible flag is intentionally dropped because the hint
+   * generator does not care about it (a hint can be any valid German
+   * word, not only words that could appear as the secret).
    */
-  wordsForLength(length: number): Promise<readonly string[]> {
+  wordsForLength(
+    length: number,
+  ): Promise<readonly (readonly [string, number])[]> {
     const entries = WORDS_BY_LENGTH.get(length);
     if (!entries) return Promise.resolve([]);
-    return Promise.resolve(entries.map(([w]) => w));
+    return Promise.resolve(entries.map(([w, z]) => [w, z] as const));
   }
 }

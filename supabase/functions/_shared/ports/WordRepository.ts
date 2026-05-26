@@ -7,10 +7,13 @@ export interface WordRepository {
   randomWord(length: number): Promise<string>;
   isValid(word: string): Promise<boolean>;
   /**
-   * Returns ALL accepted German words of the given length (the same words
-   * the validator would accept via isValid). Used by the hint generator so
-   * the domain can search the entire valid pool for a suggestion without
-   * loading the full bundle via repeated isValid checks.
+   * Returns ALL accepted German words of the given length, paired with
+   * their wordfreq Zipf score (0-7, higher = more common). The hint
+   * generator uses the score both as a filter (reject very rare words)
+   * and as a weight (bias the random pick toward more familiar words).
+   * The word column matches what `isValid` would accept.
    */
-  wordsForLength(length: number): Promise<readonly string[]>;
+  wordsForLength(
+    length: number,
+  ): Promise<readonly (readonly [string, number])[]>;
 }

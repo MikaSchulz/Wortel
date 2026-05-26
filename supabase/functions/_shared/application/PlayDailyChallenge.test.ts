@@ -22,7 +22,7 @@ class FakeWords implements WordRepository {
   isValid(): Promise<boolean> {
     return Promise.resolve(true);
   }
-  wordsForLength(): Promise<readonly string[]> {
+  wordsForLength(): Promise<readonly (readonly [string, number])[]> {
     return Promise.resolve([]);
   }
 }
