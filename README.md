@@ -1,7 +1,12 @@
 Wortel — README
 ================
 
-Wortle-Backend auf Supabase (Postgres + Auth + Edge Functions in Deno/TypeScript).
+Wortel ist ein deutsches Wortratespiel, angelehnt an Wordle. Dieses Repo enthält das
+Wortel-Backend auf Supabase (Postgres + Auth + Edge Functions in Deno/TypeScript).
+
+> Wortel ist ein unabhängiges Hobbyprojekt und steht in keiner Verbindung zu
+> The New York Times Company. Es wird von ihr weder unterstützt noch gesponsert.
+> „Wordle“ ist eine Marke von The New York Times Company.
 
 **Live:** `https://lmmjbpgfnuxbcdvjtdkm.supabase.co/functions/v1/games` — siehe [`docs/SHOWCASE.md`](docs/SHOWCASE.md) für curl-Beispiele.
 
@@ -65,12 +70,12 @@ Wortel/
 │   │   ├── _shared/       # Wortliste, Auth, CORS, Spielmechanik (testbar)
 │   │   └── games/         # Deno.serve mit interner Routing
 │   └── README.md
+├── mobile/                # Kotlin/Compose-Multiplatform-App (Android, iOS, Web)
 ├── wordlists/
 │   └── wordlist_creator.py    # Python: deutsche FrequencyWords-Quelle
-├── docs/
-│   ├── openapi.yaml
-│   └── OPEN_TASKS.md
-└── _archive_spring/       # vorherige Spring-Boot-Implementation, ungenutzt
+└── docs/
+    ├── openapi.yaml
+    └── OPEN_TASKS.md
 ```
 
 ## Deploy zu Supabase Cloud
@@ -105,8 +110,3 @@ Vollständige Doku: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 - Unit-Tests (Deno): `cd supabase/functions && deno task test`
 - Type-Check: `deno task check`
 - CI: `.github/workflows/ci.yml` (Deno-basiert, läuft auf push/PR)
-
-## Legacy Spring-Boot
-
-`_archive_spring/` enthält den vorherigen Kotlin/Spring-Stack als Referenz.
-Wird nicht mehr deployed.

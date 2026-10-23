@@ -66,7 +66,7 @@ Expected response shape:
 | GET | `/games/daily` | — | 200 — today's challenge metadata |
 | POST | `/games/daily` | — | 200 — daily game state (idempotent) |
 
-### Daily Wordle
+### Daily Challenge
 
 One shared secret per UTC day. Lazily generated on first request. User can play once
 per day; subsequent `POST /games/daily` calls return the same in-progress game so the

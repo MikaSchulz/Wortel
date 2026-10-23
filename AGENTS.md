@@ -1,27 +1,35 @@
 AGENTS — Projekt-Guide (Kurz)
 
 Project overview
-- Wortel: Kotlin-based Spring Boot application (package: `me.eyetealer.wordle`).
-- Purpose: small Wordle-like demo app; skeleton ready to extend.
+- Wortel: small German word-guessing game, inspired by Wordle (not affiliated with The New York Times).
+- Backend: Supabase (Postgres + Auth + Edge Functions in Deno/TypeScript) under `supabase/`.
+- Client: Kotlin/Compose Multiplatform app (Android, iOS, Web/wasm; desktop target for tests) under `mobile/`, package `me.eyetealer.wortel`.
 
 Key files / layout
-- `build.gradle.kts` — Gradle Kotlin DSL buildscript.
-- `src/main/kotlin/org/example/wordle/` — application code (controllers, services, models, util).
-- `src/main/resources/application.yml` — runtime configuration.
-- `README.md` (project root) — quick start and versions.
+- `supabase/functions/_shared/` — backend code, hexagonal: `domain/`, `application/`, `ports/`, `infrastructure/`, `http/`.
+- `supabase/functions/games/index.ts` — HTTP entrypoint, routing + wiring only.
+- `supabase/migrations/` — SQL schema + RLS policies.
+- `mobile/composeApp/src/commonMain/kotlin/me/eyetealer/wortel/` — shared app code (`domain/`, `data/`, `viewmodel/`, `ui/`).
+- `wordlists/wordlist_creator.py` — generates the bundled word lists.
+- `docs/openapi.yaml` — API spec. `README.md`, `supabase/README.md`, `mobile/README.md` — details.
 
-Build & run
+Build & test
 ```bash
-./gradlew clean build -x test
-./gradlew bootRun
-# health: http://localhost:8080/health
+# Backend
+cd supabase/functions
+deno task check
+deno task test
+deno task lint
+
+# Mobile (JDK 17+)
+cd mobile
+./gradlew :composeApp:desktopTest
+./gradlew :composeApp:assembleDebug
+./gradlew :composeApp:wasmJsBrowserDistribution
 ```
 
 Guidelines
-- Use the Gradle wrapper (`./gradlew`) to ensure consistent Gradle version.
-- Follow package structure: controller / service / model / util under `me.eyetealer.wordle`.
-- Add dependencies in `build.gradle.kts` and prefer Maven Central.
-
-Notes
-- The project uses Kotlin 2.3.21 and Spring Boot 4.0.6.
-- Java toolchain is configured for Java 25; Gradle can auto-download a matching JDK.
+- Follow the architecture rules in `supabase/README.md`: `domain/` stays pure (no Deno, fetch or Supabase imports).
+- The client's `domain/Evaluate.kt` mirrors the backend's `domain/game/evaluate.ts`; change both together.
+- Mobile dependency versions live in `mobile/gradle/libs.versions.toml`.
+- A push to `main` deploys DB migrations and the Edge Function (`.github/workflows/deploy.yml`).

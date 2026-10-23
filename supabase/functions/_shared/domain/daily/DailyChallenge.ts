@@ -1,5 +1,5 @@
 /**
- * Domain value object describing one calendar day's shared Wordle puzzle.
+ * Domain value object describing one calendar day's shared puzzle.
  * Immutable. No persistence concerns leak in.
  */
 export class DailyChallenge {

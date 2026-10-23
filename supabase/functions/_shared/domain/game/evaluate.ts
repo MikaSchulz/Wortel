@@ -1,7 +1,7 @@
 import { LetterResult } from "./LetterResult.ts";
 
 /**
- * Two-pass Wordle evaluation. Handles double letters per the standard rules:
+ * Two-pass guess evaluation. Handles double letters per the standard rules:
  * Pass 1 marks all CORRECT positions and consumes those secret positions;
  * Pass 2 marks PRESENT only against still-unconsumed secret positions.
  *

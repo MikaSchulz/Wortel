@@ -1,4 +1,4 @@
--- Daily Wordle support.
+-- Daily challenge support.
 --
 -- One shared secret word per calendar day (UTC). Generated lazily by the
 -- Edge Function on first request of the day — keeps us off pg_cron and
@@ -41,6 +41,6 @@ create policy "anyone reads daily challenges"
   using (true);
 
 comment on table public.daily_challenges is
-  'One Wordle secret per calendar day. Populated lazily by the games Edge Function.';
+  'One secret word per calendar day. Populated lazily by the games Edge Function.';
 comment on column public.games.daily_day is
   'Set when the game is the user''s entry for the daily challenge on that date.';
