@@ -70,12 +70,12 @@ Wortel/
 │   │   ├── _shared/       # Wortliste, Auth, CORS, Spielmechanik (testbar)
 │   │   └── games/         # Deno.serve mit interner Routing
 │   └── README.md
+├── mobile/                # Kotlin/Compose-Multiplatform-App (Android, iOS, Web)
 ├── wordlists/
 │   └── wordlist_creator.py    # Python: deutsche FrequencyWords-Quelle
-├── docs/
-│   ├── openapi.yaml
-│   └── OPEN_TASKS.md
-└── _archive_spring/       # vorherige Spring-Boot-Implementation, ungenutzt
+└── docs/
+    ├── openapi.yaml
+    └── OPEN_TASKS.md
 ```
 
 ## Deploy zu Supabase Cloud
@@ -110,8 +110,3 @@ Vollständige Doku: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 - Unit-Tests (Deno): `cd supabase/functions && deno task test`
 - Type-Check: `deno task check`
 - CI: `.github/workflows/ci.yml` (Deno-basiert, läuft auf push/PR)
-
-## Legacy Spring-Boot
-
-`_archive_spring/` enthält den vorherigen Kotlin/Spring-Stack als Referenz.
-Wird nicht mehr deployed.
