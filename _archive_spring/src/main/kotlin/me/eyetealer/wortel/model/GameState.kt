@@ -2,7 +2,7 @@ package me.eyetealer.wortel.model
 
 import java.util.UUID
 
-data class WordleState(
+data class GameState(
     val id: UUID,
     val secretWord: String,
     val wordLength: Int,

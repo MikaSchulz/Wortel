@@ -1,7 +1,7 @@
 package me.eyetealer.wortel.domain
 
 /**
- * Two-pass Wordle evaluation — mirrors backend logic exactly so client-side
+ * Two-pass guess evaluation — mirrors backend logic exactly so client-side
  * preview before submit returns the same colours as the server response.
  */
 fun evaluate(guess: String, secret: String): List<LetterResult> {

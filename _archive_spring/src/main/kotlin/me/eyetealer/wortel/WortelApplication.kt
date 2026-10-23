@@ -4,8 +4,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 
 @SpringBootApplication
-class WordleApplication
+class WortelApplication
 
 fun main(args: Array<String>) {
-    runApplication<WordleApplication>(*args)
+    runApplication<WortelApplication>(*args)
 }

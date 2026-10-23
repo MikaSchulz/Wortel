@@ -8,7 +8,7 @@ export const MIN_ATTEMPTS = 1;
 export const MAX_ATTEMPTS = 20;
 
 /**
- * Game aggregate. Holds all invariants about a single Wordle game.
+ * Game aggregate. Holds all invariants about a single Wortel game.
  * Business decisions (guess valid? game ended? letter results?) live HERE,
  * not in use cases or the HTTP layer.
  */

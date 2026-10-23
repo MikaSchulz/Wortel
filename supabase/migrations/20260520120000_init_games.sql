@@ -73,4 +73,4 @@ create policy "users delete own games"
 -- service_role bypasses RLS automatically, so Edge Functions using SUPABASE_SERVICE_ROLE_KEY
 -- can manage anonymous games (user_id IS NULL).
 
-comment on table public.games is 'Wordle game state. Edge Functions read/write via service role; user JWT context enforces ownership in code.';
+comment on table public.games is 'Wortel game state. Edge Functions read/write via service role; user JWT context enforces ownership in code.';

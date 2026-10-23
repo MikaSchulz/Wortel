@@ -2,7 +2,7 @@ package me.eyetealer.wortel.dto
 
 import me.eyetealer.wortel.model.GameStatus
 import me.eyetealer.wortel.model.GuessResult
-import me.eyetealer.wortel.model.WordleState
+import me.eyetealer.wortel.model.GameState
 import java.util.UUID
 
 data class GameStateResponse(
@@ -15,7 +15,7 @@ data class GameStateResponse(
     val secretWord: String? = null,
 )
 
-fun WordleState.toResponse(): GameStateResponse = GameStateResponse(
+fun GameState.toResponse(): GameStateResponse = GameStateResponse(
     id = id,
     status = status,
     attempts = attempts.toList(),

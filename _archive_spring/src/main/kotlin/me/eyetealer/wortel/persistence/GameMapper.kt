@@ -3,7 +3,7 @@ package me.eyetealer.wortel.persistence
 import tools.jackson.core.type.TypeReference
 import tools.jackson.databind.ObjectMapper
 import me.eyetealer.wortel.model.GuessResult
-import me.eyetealer.wortel.model.WordleState
+import me.eyetealer.wortel.model.GameState
 import org.springframework.stereotype.Component
 
 @Component
@@ -11,13 +11,13 @@ class GameMapper(private val objectMapper: ObjectMapper) {
 
     private val attemptsType = object : TypeReference<List<GuessResult>>() {}
 
-    fun toDomain(entity: GameEntity): WordleState {
+    fun toDomain(entity: GameEntity): GameState {
         val attempts: MutableList<GuessResult> = if (entity.attemptsJson.isBlank()) {
             mutableListOf()
         } else {
             objectMapper.readValue(entity.attemptsJson, attemptsType).toMutableList()
         }
-        return WordleState(
+        return GameState(
             id = entity.id,
             secretWord = entity.secretWord,
             wordLength = entity.wordLength,
@@ -27,7 +27,7 @@ class GameMapper(private val objectMapper: ObjectMapper) {
         )
     }
 
-    fun toEntity(state: WordleState, deviceId: String?): GameEntity = GameEntity(
+    fun toEntity(state: GameState, deviceId: String?): GameEntity = GameEntity(
         id = state.id,
         secretWord = state.secretWord,
         wordLength = state.wordLength,
@@ -37,7 +37,7 @@ class GameMapper(private val objectMapper: ObjectMapper) {
         deviceId = deviceId,
     )
 
-    fun updateEntity(entity: GameEntity, state: WordleState) {
+    fun updateEntity(entity: GameEntity, state: GameState) {
         entity.status = state.status
         entity.attemptsJson = objectMapper.writeValueAsString(state.attempts)
     }

@@ -98,7 +98,7 @@ paths:
     get:
       summary: Today's daily challenge metadata
       description: |
-        Returns metadata about today's shared daily Wordle. Does NOT reveal the secret.
+        Returns metadata about today's shared daily challenge. Does NOT reveal the secret.
         Lazily generates today's challenge if it doesn't exist yet.
       responses:
         '200':

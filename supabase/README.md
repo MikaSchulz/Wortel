@@ -1,6 +1,6 @@
 # Wortel on Supabase
 
-Backend for the Wortel (Wordle) game implemented as Supabase Edge Functions + Postgres + Auth.
+Backend for the Wortel word-guessing game, implemented as Supabase Edge Functions + Postgres + Auth.
 
 ## Stack
 

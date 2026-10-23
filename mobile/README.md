@@ -154,9 +154,9 @@ For now, the iOS source compiles as part of `:composeApp` so APIs stay in sync, 
 ## Next features (post-MVP)
 
 - Email/Apple/Google sign-in (upgrade anonymous user)
-- Daily Wordle (server-driven)
+- Daily challenge (server-driven)
 - Stats screen (games played, wins, streak)
 - Animations: tile flip on reveal, shake on invalid word
 - Haptics (Android `Vibrator`, iOS `UIImpactFeedbackGenerator`)
-- Share result (Wordle-style emoji grid)
+- Share result (emoji grid)
 - Settings: dark mode toggle, language toggle (DE/EN)

@@ -60,7 +60,7 @@ val integrationTestImplementation by configurations.getting {
 configurations["integrationTestRuntimeOnly"].extendsFrom(configurations.testRuntimeOnly.get())
 
 springBoot {
-    mainClass = "me.eyetealer.wortel.WordleApplicationKt"
+    mainClass = "me.eyetealer.wortel.WortelApplicationKt"
 }
 
 dependencies {

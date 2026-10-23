@@ -1,7 +1,12 @@
 Wortel — README
 ================
 
-Wortle-Backend auf Supabase (Postgres + Auth + Edge Functions in Deno/TypeScript).
+Wortel ist ein deutsches Wortratespiel, angelehnt an Wordle. Dieses Repo enthält das
+Wortel-Backend auf Supabase (Postgres + Auth + Edge Functions in Deno/TypeScript).
+
+> Wortel ist ein unabhängiges Hobbyprojekt und steht in keiner Verbindung zu
+> The New York Times Company. Es wird von ihr weder unterstützt noch gesponsert.
+> „Wordle“ ist eine Marke von The New York Times Company.
 
 **Live:** `https://lmmjbpgfnuxbcdvjtdkm.supabase.co/functions/v1/games` — siehe [`docs/SHOWCASE.md`](docs/SHOWCASE.md) für curl-Beispiele.
 

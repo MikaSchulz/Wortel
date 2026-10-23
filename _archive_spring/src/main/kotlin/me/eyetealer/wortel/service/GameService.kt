@@ -3,7 +3,7 @@ package me.eyetealer.wortel.service
 import me.eyetealer.wortel.model.GameStatus
 import me.eyetealer.wortel.model.GuessResult
 import me.eyetealer.wortel.model.LetterResult
-import me.eyetealer.wortel.model.WordleState
+import me.eyetealer.wortel.model.GameState
 import me.eyetealer.wortel.persistence.GameEntity
 import me.eyetealer.wortel.persistence.GameMapper
 import me.eyetealer.wortel.persistence.GameRepository
@@ -23,14 +23,14 @@ class GameService(
         wordLength: Int = DEFAULT_WORD_LENGTH,
         maxAttempts: Int = DEFAULT_MAX_ATTEMPTS,
         deviceId: String? = null,
-    ): WordleState {
+    ): GameState {
         require(wordLength in wordListService.supportedLengths()) {
             "Unsupported wordLength: $wordLength"
         }
         require(maxAttempts in MIN_ATTEMPTS..MAX_ATTEMPTS) {
             "maxAttempts must be in $MIN_ATTEMPTS..$MAX_ATTEMPTS"
         }
-        val state = WordleState(
+        val state = GameState(
             id = UUID.randomUUID(),
             secretWord = wordListService.randomWord(wordLength),
             wordLength = wordLength,
@@ -41,14 +41,14 @@ class GameService(
     }
 
     @Transactional(readOnly = true)
-    fun getGame(id: UUID, deviceId: String? = null): WordleState? {
+    fun getGame(id: UUID, deviceId: String? = null): GameState? {
         val entity = gameRepository.findById(id).orElse(null) ?: return null
         verifyOwnership(entity, deviceId)
         return gameMapper.toDomain(entity)
     }
 
     @Transactional
-    fun submitGuess(id: UUID, guess: String, deviceId: String? = null): WordleState {
+    fun submitGuess(id: UUID, guess: String, deviceId: String? = null): GameState {
         val entity = gameRepository.findById(id).orElseThrow { GameNotFoundException(id) }
         verifyOwnership(entity, deviceId)
         val state = gameMapper.toDomain(entity)
