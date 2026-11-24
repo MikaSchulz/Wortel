@@ -1,34 +1,40 @@
-import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
+// Shared module: domain, data, view models and the whole Compose UI for every
+// platform. It is a Kotlin Multiplatform *library* — the Android application
+// lives in :androidApp (AGP 9 no longer lets com.android.application share a
+// module with the KMP plugin), iOS consumes the ComposeApp framework, and the
+// web app is the wasmJs executable built from this module.
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.kotlin.serialization)
-    alias(libs.plugins.android.application)
+    alias(libs.plugins.android.kotlin.multiplatform.library)
     alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.compose.compiler)
 }
 
 kotlin {
-    androidTarget {
-        @OptIn(ExperimentalKotlinGradlePluginApi::class)
+    android {
+        namespace = "me.eyetealer.wortel.shared"
+        compileSdk = libs.versions.android.compileSdk.get().toInt()
+        minSdk = libs.versions.android.minSdk.get().toInt()
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
         }
     }
 
     // Pure JVM target — runs commonMain tests on machines without an
-    // Android SDK (CI, SSH dev box). Not shipped as a runnable artifact.
+    // Android SDK or emulator (CI, SSH dev box). Not shipped.
     jvm("desktop") {
-        @OptIn(ExperimentalKotlinGradlePluginApi::class)
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
         }
     }
 
+    // Apple Silicon only: Compose Multiplatform 1.12 dropped the x86_64
+    // simulator target (iosX64) that Kotlin has deprecated.
     listOf(
-        iosX64(),
         iosArm64(),
         iosSimulatorArm64(),
     ).forEach { iosTarget ->
@@ -38,13 +44,11 @@ kotlin {
         }
     }
 
-    // Web target — Compose Multiplatform on Kotlin/Wasm. Renders the same
-    // commonMain UI in the browser via WebAssembly + Skia. Produces static
-    // files (HTML + JS + .wasm) deployable to GitHub Pages, Cloudflare Pages,
-    // Supabase Storage, etc.
+    // Web target — renders the same commonMain UI in the browser via
+    // WebAssembly + Skia. Produces static files for GitHub Pages.
     @OptIn(ExperimentalWasmDsl::class)
     wasmJs {
-        moduleName = "composeApp"
+        outputModuleName = "composeApp"
         browser {
             commonWebpackConfig {
                 outputFileName = "composeApp.js"
@@ -72,8 +76,8 @@ kotlin {
 
             implementation(project.dependencies.platform(libs.supabase.bom))
             implementation(libs.supabase.auth)
-            implementation(libs.supabase.functions)
-            implementation(libs.supabase.postgrest)
+
+            implementation(libs.multiplatform.settings.noarg)
         }
 
         commonTest.dependencies {
@@ -82,7 +86,6 @@ kotlin {
         }
 
         androidMain.dependencies {
-            implementation(libs.androidx.activity.compose)
             implementation(libs.kotlinx.coroutines.android)
             implementation(libs.ktor.client.okhttp)
         }
@@ -91,36 +94,9 @@ kotlin {
             implementation(libs.ktor.client.darwin)
         }
 
-        // wasmJs (browser) — uses the JS Ktor engine which doubles as the
-        // wasmJs engine in Ktor 3.
-        val wasmJsMain by getting {
-            dependencies {
-                implementation(libs.ktor.client.js)
-            }
-        }
-    }
-}
-
-android {
-    namespace = "me.eyetealer.wortel"
-    compileSdk = libs.versions.android.compileSdk.get().toInt()
-
-    defaultConfig {
-        applicationId = "me.eyetealer.wortel"
-        minSdk = libs.versions.android.minSdk.get().toInt()
-        targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "0.1.0"
-    }
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    buildTypes {
-        release {
-            isMinifyEnabled = false
+        // The JS Ktor engine doubles as the wasmJs engine.
+        wasmJsMain.dependencies {
+            implementation(libs.ktor.client.js)
         }
     }
 }

@@ -1,8 +1,8 @@
 package me.eyetealer.wortel.data
 
 import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.status.SessionStatus
 import io.ktor.client.HttpClient
-import kotlinx.coroutines.flow.first
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.header
@@ -17,7 +17,16 @@ import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import io.ktor.http.takeFrom
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
+
+/** The `games` Edge Function as seen by the app. */
+interface GameApi {
+    suspend fun create(req: CreateGameRequest = CreateGameRequest()): CreateGameResponse
+    suspend fun get(id: String): GameStateResponse
+    suspend fun submitGuess(id: String, guess: String): GameStateResponse
+    suspend fun requestHint(id: String): HintResponse
+}
 
 /**
  * Thin client around the `games` Edge Function.
@@ -29,7 +38,7 @@ import kotlinx.serialization.json.Json
  * error code/message to the UI. With our own HttpClient we read the
  * response body ourselves and produce a clean `WortelApiException`.
  */
-class GameRepository(private val supabase: Supabase = Supabase) {
+class GameRepository(private val supabase: Supabase = Supabase) : GameApi {
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -38,16 +47,16 @@ class GameRepository(private val supabase: Supabase = Supabase) {
         expectSuccess = false // we handle non-2xx explicitly
     }
 
-    suspend fun create(req: CreateGameRequest = CreateGameRequest()): CreateGameResponse =
+    override suspend fun create(req: CreateGameRequest): CreateGameResponse =
         request(HttpMethod.Post, "games", req)
 
-    suspend fun get(id: String): GameStateResponse =
+    override suspend fun get(id: String): GameStateResponse =
         request(HttpMethod.Get, "games/$id", body = null as Unit?)
 
-    suspend fun submitGuess(id: String, guess: String): GameStateResponse =
+    override suspend fun submitGuess(id: String, guess: String): GameStateResponse =
         request(HttpMethod.Post, "games/$id/guesses", GuessRequest(guess))
 
-    suspend fun requestHint(id: String): HintResponse =
+    override suspend fun requestHint(id: String): HintResponse =
         request(HttpMethod.Post, "games/$id/hint", body = null as Unit?)
 
     private suspend inline fun <reified Req : Any, reified Res> request(
@@ -58,9 +67,7 @@ class GameRepository(private val supabase: Supabase = Supabase) {
         // Belt-and-braces: even if the caller didn't await auth init,
         // make sure we don't fire off a request with just the publishable
         // key while a real session is still loading from storage.
-        supabase.client.auth.sessionStatus.first {
-            it !is io.github.jan.supabase.auth.status.SessionStatus.Initializing
-        }
+        supabase.client.auth.sessionStatus.first { it !is SessionStatus.Initializing }
         val token = supabase.client.auth.currentSessionOrNull()?.accessToken
             ?: SupabaseConfig.PUBLISHABLE_KEY
 

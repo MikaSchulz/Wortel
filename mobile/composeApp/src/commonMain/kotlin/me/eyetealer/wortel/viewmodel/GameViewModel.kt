@@ -8,9 +8,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.eyetealer.wortel.data.AuthRepository
+import me.eyetealer.wortel.data.AuthService
+import me.eyetealer.wortel.data.CreateGameRequest
 import me.eyetealer.wortel.data.ErrorMessages
+import me.eyetealer.wortel.data.GameApi
 import me.eyetealer.wortel.data.GameRepository
 import me.eyetealer.wortel.data.GameSessionStorage
+import me.eyetealer.wortel.data.LocalStorage
 import me.eyetealer.wortel.data.SettingsStorage
 import me.eyetealer.wortel.data.UserState
 import me.eyetealer.wortel.data.WortelApiException
@@ -102,10 +106,10 @@ data class GameUiState(
 }
 
 class GameViewModel(
-    private val games: GameRepository = GameRepository(),
-    private val auth: AuthRepository = AuthRepository(),
-    private val storage: GameSessionStorage = GameSessionStorage(),
-    private val settings: SettingsStorage = SettingsStorage(),
+    private val games: GameApi = GameRepository(),
+    private val auth: AuthService = AuthRepository(),
+    private val storage: GameSessionStorage = LocalStorage(),
+    private val settings: SettingsStorage = LocalStorage(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(GameUiState(colorblind = settings.isColorblind()))
@@ -229,10 +233,10 @@ class GameViewModel(
                     // Finished game — don't restore the user into a dead state.
                     storage.saveGameId(null)
                     _state.value = GameUiState(
-                    initializing = false,
-                    user = _state.value.user,
-                    colorblind = _state.value.colorblind,
-                )
+                        initializing = false,
+                        user = _state.value.user,
+                        colorblind = _state.value.colorblind,
+                    )
                 } else {
                     _state.value = GameUiState(
                         initializing = false,
@@ -262,10 +266,10 @@ class GameViewModel(
                 if (isStale) {
                     storage.saveGameId(null)
                     _state.value = GameUiState(
-                    initializing = false,
-                    user = _state.value.user,
-                    colorblind = _state.value.colorblind,
-                )
+                        initializing = false,
+                        user = _state.value.user,
+                        colorblind = _state.value.colorblind,
+                    )
                 } else {
                     val saved = _state.value.savedGameId ?: id
                     _state.value = GameUiState(
@@ -302,12 +306,7 @@ class GameViewModel(
         viewModelScope.launch {
             runCatching {
                 auth.awaitInitialized()
-                games.create(
-                    me.eyetealer.wortel.data.CreateGameRequest(
-                        wordLength = wordLength,
-                        maxAttempts = maxAttempts,
-                    ),
-                )
+                games.create(CreateGameRequest(wordLength = wordLength, maxAttempts = maxAttempts))
             }.fold(
                 onSuccess = { resp ->
                     storage.saveGameId(resp.id)

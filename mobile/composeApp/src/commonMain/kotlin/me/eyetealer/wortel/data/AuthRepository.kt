@@ -30,18 +30,34 @@ data class UserState(
     }
 }
 
-class AuthRepository(private val client: Supabase = Supabase) {
+/** Authentication as seen by the app — lets the ViewModel run against a fake. */
+interface AuthService {
+    /** Suspends until any persisted session has been loaded from storage. */
+    suspend fun awaitInitialized()
+
+    /** Emits a fresh [UserState] every time the session changes. */
+    fun observeUser(): Flow<UserState>
+
+    fun currentUserState(): UserState
+
+    suspend fun signInWithGoogle()
+
+    suspend fun signInAnonymously()
+
+    suspend fun signOut()
+}
+
+class AuthRepository(private val client: Supabase = Supabase) : AuthService {
 
     /**
      * Wait until the SDK has finished loading any persisted session from
      * storage. Until this resolves, currentSessionOrNull lies.
      */
-    suspend fun awaitInitialized() {
+    override suspend fun awaitInitialized() {
         client.client.auth.sessionStatus.first { it !is SessionStatus.Initializing }
     }
 
-    /** Cold flow that emits a fresh [UserState] every time the session changes. */
-    fun observeUser(): Flow<UserState> =
+    override fun observeUser(): Flow<UserState> =
         client.client.auth.sessionStatus.map { status ->
             when (status) {
                 is SessionStatus.Authenticated -> status.session.user?.toUserState() ?: UserState.SignedOut
@@ -49,7 +65,7 @@ class AuthRepository(private val client: Supabase = Supabase) {
             }
         }
 
-    fun currentUserState(): UserState {
+    override fun currentUserState(): UserState {
         val user = client.client.auth.currentUserOrNull() ?: return UserState.SignedOut
         return user.toUserState()
     }
@@ -66,16 +82,16 @@ class AuthRepository(private val client: Supabase = Supabase) {
      * sub-path-hosted apps. Native targets return null here and rely on
      * their own deep-link wiring.
      */
-    suspend fun signInWithGoogle() {
+    override suspend fun signInWithGoogle() {
         client.client.auth.signInWith(Google, redirectUrl = currentAppUrl())
     }
 
     /** Anonymous "guest" mode — gets a stable user_id without an email. */
-    suspend fun signInAnonymously() {
+    override suspend fun signInAnonymously() {
         client.client.auth.signInAnonymously()
     }
 
-    suspend fun signOut() {
+    override suspend fun signOut() {
         client.client.auth.signOut()
     }
 

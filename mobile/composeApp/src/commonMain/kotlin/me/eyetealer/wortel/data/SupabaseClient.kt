@@ -3,12 +3,11 @@ package me.eyetealer.wortel.data
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.createSupabaseClient
-import io.github.jan.supabase.functions.Functions
 
 /**
- * Singleton Supabase client. Holds Auth (anonymous sign-in) + Functions
- * (Edge Function invocation). RLS-bound Postgrest is also wired up for
- * future direct table queries (e.g. user stats).
+ * Singleton Supabase client. Only Auth is installed: game traffic goes to
+ * the `games` Edge Function through [GameRepository]'s own Ktor client, and
+ * tables are never queried directly (RLS keeps them closed anyway).
  */
 object Supabase {
     val client: SupabaseClient by lazy {
@@ -20,7 +19,6 @@ object Supabase {
                 alwaysAutoRefresh = true
                 autoLoadFromStorage = true
             }
-            install(Functions)
         }
     }
 }
