@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Wortel API
-  version: "1.0.0"
+  version: "1.1.0"
   description: |
     REST API served by the Supabase Edge Function `games`.
     Base URL: `https://<project-ref>.supabase.co/functions/v1/games`
@@ -94,6 +94,41 @@ paths:
           description: Game not found
         '409':
           description: Game is not running (already won or lost)
+  /games/{gameId}/hint:
+    post:
+      summary: Get a hint word
+      description: |
+        Returns a valid word that reveals at least one new correct-position
+        letter, is never the secret itself and is not an earlier guess.
+        Common words are preferred. The hint does not consume an attempt by
+        itself — the app submits it as the next guess right away so the
+        information always costs one attempt.
+      parameters:
+        - name: gameId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Hint word
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HintResponse'
+        '403':
+          description: JWT user does not own this game
+        '404':
+          description: Game not found
+        '409':
+          description: Game is not running (already won or lost)
+        '422':
+          description: No qualifying hint word exists (code NO_HINT_AVAILABLE)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
   /games/daily:
     get:
       summary: Today's daily challenge metadata
@@ -114,8 +149,9 @@ paths:
         game is created bound to today's challenge. Subsequent calls return the
         same game so the UI can restore state.
 
-        Anonymous play: send `X-Anonymous-Id: <client-generated-uuid>`. The same
-        UUID returns the same game on future calls. Without auth and without the
+        Anonymous play: send `X-Anonymous-Id: <client-generated-uuid>` — a stable
+        per-install id. The same id returns the same game for the rest of the
+        day and gets a fresh game on the next day. Without auth and without the
         header, the request is rejected.
       parameters:
         - in: header
@@ -146,7 +182,7 @@ components:
       properties:
         wordLength:
           type: integer
-          description: desired secret-word length (default 5; supported 5,6,7)
+          description: desired secret-word length (default 5; supported 4..7)
         maxAttempts:
           type: integer
           description: maximum allowed attempts (default 6; range 1..20)
@@ -219,6 +255,38 @@ components:
           enum: [UNKNOWN_WORD, WRONG_LENGTH]
         message:
           type: string
+    HintResponse:
+      type: object
+      required: [hint]
+      properties:
+        hint:
+          type: string
+    ApiError:
+      type: object
+      description: |
+        Body of every 4xx/5xx response. `code` is stable and meant for
+        client-side translation; `error` is a human-readable English message.
+        Unexpected server errors always answer `{ "error": "Internal error",
+        "code": "INTERNAL" }` without internal details.
+      required: [error, code]
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+          enum:
+            - GAME_NOT_FOUND
+            - FORBIDDEN
+            - GAME_NOT_RUNNING
+            - WRONG_LENGTH
+            - UNKNOWN_WORD
+            - INVALID_WORD_LENGTH
+            - INVALID_MAX_ATTEMPTS
+            - SECRET_LENGTH_MISMATCH
+            - INVALID_INPUT
+            - NO_HINT_AVAILABLE
+            - CONCURRENCY
+            - INTERNAL
     DailyChallengeMeta:
       type: object
       required: [day, wordLength, maxAttempts]

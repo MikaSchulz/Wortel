@@ -8,8 +8,9 @@ Project overview
 Key files / layout
 - `supabase/functions/_shared/` — backend code, hexagonal: `domain/`, `application/`, `ports/`, `infrastructure/`, `http/`.
 - `supabase/functions/games/index.ts` — HTTP entrypoint, routing + wiring only.
-- `supabase/migrations/` — SQL schema + RLS policies.
-- `mobile/composeApp/src/commonMain/kotlin/me/eyetealer/wortel/` — shared app code (`domain/`, `data/`, `viewmodel/`, `ui/`).
+- `supabase/migrations/` — SQL schema + RLS policies (forward-only; never edit a deployed migration).
+- `mobile/composeApp/` — KMP library with all shared code: `src/commonMain/kotlin/me/eyetealer/wortel/` (`domain/`, `data/`, `viewmodel/`, `ui/`), web entry in `wasmJsMain/`.
+- `mobile/androidApp/` — Android application shell (MainActivity, manifest). AGP 9 forbids the application plugin in the KMP module.
 - `wordlists/wordlist_creator.py` — generates the bundled word lists.
 - `docs/openapi.yaml` — API spec. `README.md`, `supabase/README.md`, `mobile/README.md` — details.
 
@@ -17,19 +18,20 @@ Build & test
 ```bash
 # Backend
 cd supabase/functions
-deno task check
-deno task test
-deno task lint
+deno task verify      # fmt:check + check + lint + test
 
-# Mobile (JDK 17+)
+# Mobile (JDK 17+, Android SDK)
 cd mobile
 ./gradlew :composeApp:desktopTest
-./gradlew :composeApp:assembleDebug
+./gradlew :androidApp:assembleDebug
 ./gradlew :composeApp:wasmJsBrowserDistribution
 ```
 
 Guidelines
-- Follow the architecture rules in `supabase/README.md`: `domain/` stays pure (no Deno, fetch or Supabase imports).
+- Follow the architecture rules in `supabase/README.md`; `_shared/architecture.test.ts` enforces them (`domain/` and `application/` stay free of Deno, fetch and Supabase imports; `http/` never imports `infrastructure/`).
+- Run `deno task fmt` before committing backend code; CI checks formatting.
 - The client's `domain/Evaluate.kt` mirrors the backend's `domain/game/evaluate.ts`; change both together.
+- New backend error codes need a German translation in the client's `data/ErrorMessages.kt`.
+- `GameViewModel` talks to interfaces (`GameApi`, `AuthService`, storage); extend the fakes in `GameViewModelTest` when they change.
 - Mobile dependency versions live in `mobile/gradle/libs.versions.toml`.
-- A push to `main` deploys DB migrations and the Edge Function (`.github/workflows/deploy.yml`).
+- A push to `main` deploys DB migrations and then the Edge Function (`.github/workflows/deploy.yml`), and the web app to GitHub Pages.

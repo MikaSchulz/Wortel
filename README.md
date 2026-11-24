@@ -1,63 +1,27 @@
 Wortel — README
 ================
 
-Wortel ist ein deutsches Wortratespiel, angelehnt an Wordle. Dieses Repo enthält das
-Wortel-Backend auf Supabase (Postgres + Auth + Edge Functions in Deno/TypeScript).
+Wortel ist ein deutsches Wortratespiel, angelehnt an Wordle. Das Repo enthält das
+Backend auf Supabase (Postgres + Auth + Edge Functions in Deno/TypeScript) und die
+Client-App in Kotlin/Compose Multiplatform (Android, iOS, Web).
 
 > Wortel ist ein unabhängiges Hobbyprojekt und steht in keiner Verbindung zu
 > The New York Times Company. Es wird von ihr weder unterstützt noch gesponsert.
 > „Wordle“ ist eine Marke von The New York Times Company.
 
-**Live:** `https://lmmjbpgfnuxbcdvjtdkm.supabase.co/functions/v1/games` — siehe [`docs/SHOWCASE.md`](docs/SHOWCASE.md) für curl-Beispiele.
+**Live**
+- Web-App: `https://mikaschulz.github.io/Wortel/`
+- API: `https://lmmjbpgfnuxbcdvjtdkm.supabase.co/functions/v1/games` — curl-Beispiele in [`docs/SHOWCASE.md`](docs/SHOWCASE.md)
 
 ## Stack
 
-- **Supabase Postgres** — Spielzustand (`public.games`) mit Row Level Security
-- **Supabase Auth** — Email + anonymes Sign-in; JWT in Edge Functions validiert
-- **Edge Functions** — Deno/TypeScript, Funktion `games` exposed REST-API
-- **Wortlisten** — gebündelt in der Function unter `supabase/functions/_shared/data/`
-
-## Quick start
-
-```bash
-# Deno installieren
-curl -fsSL https://deno.land/install.sh | sh
-
-# Supabase CLI installieren
-brew install supabase/tap/supabase   # oder: scoop/npm install -g supabase
-
-# Lokalen Stack starten (Postgres + Auth + Edge runtime)
-supabase start
-supabase db reset           # wendet supabase/migrations/* an
-
-# Edge Function lokal serven
-supabase functions serve games --env-file ./supabase/.env.local
-
-# Tests
-cd supabase/functions
-deno task test
-deno task check
-```
-
-Smoke test:
-
-```bash
-curl -X POST http://127.0.0.1:54321/functions/v1/games \
-  -H 'Content-Type: application/json' \
-  -d '{"wordLength":5,"maxAttempts":6}'
-```
-
-## API
-
-Base URL nach Deploy: `https://<project-ref>.supabase.co/functions/v1/games`
-
-- `POST /games` → erstellt Spiel
-- `GET /games/{id}` → Spielstatus
-- `POST /games/{id}/guesses` → rät
-
-`Authorization: Bearer <jwt>` setzt das Spiel auf den User. Ohne Header → anonymes Spiel.
-
-Details: [`supabase/README.md`](supabase/README.md) und [`docs/openapi.yaml`](docs/openapi.yaml).
+| Teil | Technik |
+| --- | --- |
+| Datenbank | Supabase Postgres — `public.games`, `public.daily_challenges`, Row Level Security |
+| Auth | Supabase Auth — Google OAuth + anonymer Gast-Login; JWT-Prüfung in der Edge Function (`auth.getClaims`) |
+| API | Edge Function `games` (Deno 2, TypeScript), hexagonale Architektur |
+| Wortlisten | 4–7 Buchstaben, als TS-Module gebündelt unter `supabase/functions/_shared/infrastructure/data/` |
+| Client | Kotlin 2.4, Compose Multiplatform 1.12, Ktor 3, supabase-kt 3 |
 
 ## Verzeichnislayout
 
@@ -65,48 +29,58 @@ Details: [`supabase/README.md`](supabase/README.md) und [`docs/openapi.yaml`](do
 Wortel/
 ├── supabase/
 │   ├── config.toml
-│   ├── migrations/        # SQL: tables + RLS
+│   ├── migrations/            # SQL: Tabellen, RLS, Indizes
 │   ├── functions/
-│   │   ├── _shared/       # Wortliste, Auth, CORS, Spielmechanik (testbar)
-│   │   └── games/         # Deno.serve mit interner Routing
+│   │   ├── _shared/           # domain / application / ports / infrastructure / http
+│   │   └── games/index.ts     # Composition Root: Routing + Wiring
+│   └── README.md              # Backend-Architektur + Regeln
+├── mobile/
+│   ├── composeApp/            # KMP-Library: gesamte App-Logik + UI (alle Plattformen), Web-Entry
+│   ├── androidApp/            # Android-App-Hülle (MainActivity)
 │   └── README.md
-├── mobile/                # Kotlin/Compose-Multiplatform-App (Android, iOS, Web)
-├── wordlists/
-│   └── wordlist_creator.py    # Python: deutsche FrequencyWords-Quelle
+├── wordlists/                 # Python-Generator für die Wortlisten
 └── docs/
-    ├── openapi.yaml
+    ├── openapi.yaml           # API-Spezifikation
+    ├── DEPLOYMENT.md
+    ├── SHOWCASE.md
     └── OPEN_TASKS.md
 ```
 
-## Deploy zu Supabase Cloud
+## API
 
-Standard-Pfad: GitHub Actions auf push zu `main`.
+| Methode | Pfad | Zweck |
+| --- | --- | --- |
+| POST | `/games` | Freies Spiel anlegen (`wordLength` 4–7, `maxAttempts` 1–20) |
+| GET | `/games/{id}` | Spielstand |
+| POST | `/games/{id}/guesses` | Raten |
+| POST | `/games/{id}/hint` | Tipp-Wort holen |
+| GET | `/games/daily` | Metadaten der Tageschallenge |
+| POST | `/games/daily` | Tageschallenge spielen (idempotent) |
 
-Pipeline: `verify (deno check/test/lint) → db push → functions deploy → smoke test`.
+`Authorization: Bearer <jwt>` bindet das Spiel an den User; ohne gültiges JWT ist das
+Spiel anonym. Details: [`supabase/README.md`](supabase/README.md), [`docs/openapi.yaml`](docs/openapi.yaml).
 
-One-time setup (Repo Secrets):
-- `SUPABASE_ACCESS_TOKEN` — Dashboard → Account → Access Tokens
-- `SUPABASE_PROJECT_REF` — Project-URL Slug
-- `SUPABASE_DB_PASSWORD` — bei Projekt-Erstellung gesetzt
-- `SUPABASE_PUBLISHABLE_KEY` — Project → Settings → API Keys → Publishable (`sb_publishable_*`)
-- `WORTEL_CORS_ALLOWED_ORIGINS` — optional
+## Quick start
 
-Hinweis: Supabase hat Ende 2025 Keys umbenannt. Legacy `anon public` → `sb_publishable_*`, Legacy `service_role` → `sb_secret_*`. Code unterstützt beide.
-
-Manuell triggern: GitHub → Actions → "Deploy to Supabase" → Run workflow.
-
-Manual CLI als Fallback:
 ```bash
-supabase login
-supabase link --project-ref <project-ref>
-supabase db push
-supabase functions deploy games
+# Backend: Deno 2 + Supabase CLI 3 installieren, dann
+supabase start                      # lokaler Stack (Docker), wendet Migrationen an
+supabase functions serve games --env-file ./supabase/.env.local
+cd supabase/functions && deno task verify   # fmt + typecheck + lint + tests
+
+# Client (JDK 21, Android SDK)
+cd mobile
+./gradlew :composeApp:desktopTest
+./gradlew :androidApp:assembleDebug
+./gradlew :composeApp:wasmJsBrowserDevelopmentRun   # Web-App lokal
 ```
 
-Vollständige Doku: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+## Deploy
 
-## Tests & CI
+Push auf `main` → GitHub Actions:
 
-- Unit-Tests (Deno): `cd supabase/functions && deno task test`
-- Type-Check: `deno task check`
-- CI: `.github/workflows/ci.yml` (Deno-basiert, läuft auf push/PR)
+- `deploy.yml`: verify → `supabase db push` → `supabase functions deploy games` → Smoke-Test
+- `web-deploy.yml`: Wasm-Build → GitHub Pages
+- `ci.yml` / `mobile-build.yml`: Tests, Lint, Migrations-Check, APK auf jedem PR
+
+Benötigte Repo-Secrets und Einrichtung: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).

@@ -8,12 +8,14 @@ Three deployment paths. Production setup uses **GitHub Actions** (`.github/workf
 
 `.github/workflows/deploy.yml` runs on push to `main`:
 
-1. **verify** — `deno check`, `deno test`, `deno lint`
+1. **verify** — `deno task verify` (fmt check, typecheck, lint, tests incl. architecture rules)
 2. **deploy-db** — `supabase db push` applies migrations
-3. **deploy-functions** — `supabase functions deploy games` + sets function secrets
-4. **smoke-test** — `curl POST /games` against deployed URL
+3. **deploy-functions** — `supabase functions deploy games` + sets function secrets; runs
+   only after the migrations succeeded (or were skipped), so new code never meets an old schema
+4. **smoke-test** — `POST /games` and `GET /games/daily` against the deployed URL
 
-Sequential gates: if verify fails, nothing deploys.
+Sequential gates: if verify fails, nothing deploys. Every PR additionally applies all
+migrations to a throwaway local Supabase Postgres (`ci.yml` → `migrations`).
 
 ### One-time setup
 
@@ -29,6 +31,8 @@ Sequential gates: if verify fails, nothing deploys.
 - Dashboard → Account → Access Tokens → Generate new token
 - Scope: full access
 - Copy once — `SUPABASE_ACCESS_TOKEN`
+- Tokens can expire or be revoked. If the deploy fails at `supabase link` with
+  `Invalid access token`, generate a new one and update the repo secret.
 
 #### 3. Add repo secrets
 
@@ -71,8 +75,7 @@ If you add the `production` environment, the deploy jobs auto-pause until approv
 Push to `main` (or run `workflow_dispatch` manually). Pipeline:
 
 ```
-verify ─▶ deploy-db ─┐
-        └─▶ deploy-functions ─▶ smoke-test
+verify ─▶ deploy-db ─▶ deploy-functions ─▶ smoke-test
 ```
 
 ---

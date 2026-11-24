@@ -28,14 +28,14 @@ enable_signup = true
 enable_anonymous_sign_ins = true
 
 [auth.email]
-enable_signup = true
+enabled = true
 double_confirm_changes = true
 enable_confirmations = false
 
 [functions.games]
+# JWT verified inside the function (auth.getClaims) so anonymous play stays
+# possible and the new non-JWT publishable keys are accepted at the gateway.
 verify_jwt = false
-# JWT verified inside the function so anonymous play stays possible.
-# Set to true to force authenticated access at the gateway level.
 
 [edge_runtime]
 enabled = true

@@ -60,17 +60,19 @@ Expected response shape:
 
 | Method | Path | Body | Returns |
 | --- | --- | --- | --- |
-| POST | `/games` | `{wordLength?:5\|6\|7, maxAttempts?:1..20}` | 201 — `{id, wordLength, maxAttempts}` |
+| POST | `/games` | `{wordLength?:4..7, maxAttempts?:1..20}` | 201 — `{id, wordLength, maxAttempts}` |
 | GET | `/games/{id}` | — | 200 — full game state |
 | POST | `/games/{id}/guesses` | `{guess: "haben"}` | 200 — updated state |
+| POST | `/games/{id}/hint` | — | 200 — `{hint}` |
 | GET | `/games/daily` | — | 200 — today's challenge metadata |
 | POST | `/games/daily` | — | 200 — daily game state (idempotent) |
 
 ### Daily Challenge
 
-One shared secret per UTC day. Lazily generated on first request. User can play once
-per day; subsequent `POST /games/daily` calls return the same in-progress game so the
-UI can restore state. Anonymous play needs an `X-Anonymous-Id: <uuid>` header.
+One shared secret per UTC day. Lazily generated on first request (race-safe: the first
+stored word wins). User can play once per day; subsequent `POST /games/daily` calls
+return the same in-progress game so the UI can restore state. Anonymous play needs a
+stable per-install `X-Anonymous-Id: <uuid>` header.
 
 ```bash
 # Authenticated play
@@ -123,16 +125,19 @@ const { data, error } = await supabase.auth.signInAnonymously();
 Every push to `main` triggers `.github/workflows/deploy.yml`:
 
 ```
-verify (deno check + test + lint)
+verify (deno task verify: fmt + check + lint + test)
    │
-   ├─▶ deploy-db (supabase db push)
-   └─▶ deploy-functions (supabase functions deploy games)
-                                │
-                                ▼
-                          smoke-test (curl POST /games)
+   ▼
+deploy-db (supabase db push)
+   │
+   ▼
+deploy-functions (supabase functions deploy games)
+   │
+   ▼
+smoke-test (POST /games, GET /games/daily)
 ```
 
-Last successful deploy: commit `79b44e6` — wordlists bundled as TS modules.
+Deploy history: GitHub → Actions → "Deploy to Supabase".
 
 ## Manual rollback
 

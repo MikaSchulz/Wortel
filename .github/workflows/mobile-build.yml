@@ -46,10 +46,13 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      - name: Cache Kotlin/Native toolchain
+      - name: Cache Kotlin/Native + Wasm toolchains
         uses: actions/cache@v6
         with:
-          path: ~/.konan
+          path: |
+            ~/.konan
+            ~/.gradle/nodejs
+            ~/.gradle/yarn
           key: ${{ runner.os }}-konan-${{ hashFiles('mobile/gradle/libs.versions.toml') }}
 
       - name: Unit tests (JVM)
@@ -59,8 +62,13 @@ jobs:
         run: ./gradlew :androidApp:lintDebug :androidApp:assembleDebug
 
       # Klib cross-compilation: type-checks iosMain on Linux without Xcode.
-      - name: Compile iOS + web sources
-        run: ./gradlew :composeApp:compileKotlinIosSimulatorArm64 :composeApp:compileProductionExecutableKotlinWasmJs
+      - name: Compile iOS sources
+        run: ./gradlew :composeApp:compileKotlinIosSimulatorArm64
+
+      # Full web bundle (Kotlin/Wasm + webpack), so PRs catch what web-deploy
+      # would otherwise only hit after merging to main.
+      - name: Build web distribution
+        run: ./gradlew :composeApp:wasmJsBrowserDistribution
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
