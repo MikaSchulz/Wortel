@@ -1,7 +1,7 @@
 // Pure domain unit tests — no Supabase, no I/O.
 // Run with: deno test --allow-read _shared/domain/
 
-import { assert, assertEquals, assertThrows } from "jsr:@std/assert@1";
+import { assert, assertEquals, assertThrows } from "@std/assert";
 import { Game } from "./Game.ts";
 import { DomainError } from "../shared/DomainError.ts";
 

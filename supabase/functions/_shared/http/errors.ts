@@ -20,6 +20,9 @@ const STATUS_BY_CODE: Record<DomainErrorCode, number> = {
  *
  * Response body is `{ error: string, code: string }` so clients can map
  * codes to localised messages without parsing the human-readable message.
+ * Unexpected errors are logged in full but answered with a generic message:
+ * database errors can carry table/column/constraint details that callers
+ * have no business seeing.
  */
 export function mapErrorToResponse(req: Request, e: unknown): Response {
   if (e instanceof DomainError) {
@@ -30,6 +33,5 @@ export function mapErrorToResponse(req: Request, e: unknown): Response {
     return jsonResponse(req, { error: e.message, code: "CONCURRENCY" }, { status: 409 });
   }
   console.error("Unhandled error", e);
-  const msg = e instanceof Error ? e.message : "Internal error";
-  return jsonResponse(req, { error: msg, code: "INTERNAL" }, { status: 500 });
+  return jsonResponse(req, { error: "Internal error", code: "INTERNAL" }, { status: 500 });
 }

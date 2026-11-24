@@ -1,4 +1,4 @@
-import { Game, MAX_ATTEMPTS, MIN_ATTEMPTS } from "../domain/game/Game.ts";
+import { Game } from "../domain/game/Game.ts";
 import { DomainError } from "../domain/shared/DomainError.ts";
 import { GameRepository } from "../ports/GameRepository.ts";
 import { WordRepository } from "../ports/WordRepository.ts";
@@ -26,16 +26,9 @@ export class CreateGame {
     const wordLength = input.wordLength ?? DEFAULT_WORD_LENGTH;
     const maxAttempts = input.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
 
-    if (
-      !Number.isInteger(maxAttempts) ||
-      maxAttempts < MIN_ATTEMPTS ||
-      maxAttempts > MAX_ATTEMPTS
-    ) {
-      throw new DomainError(
-        "INVALID_MAX_ATTEMPTS",
-        `maxAttempts must be in ${MIN_ATTEMPTS}..${MAX_ATTEMPTS}`,
-      );
-    }
+    // Fail fast on obviously bad input before we touch the word list;
+    // Game.create() re-checks as the authoritative invariant.
+    Game.assertValidMaxAttempts(maxAttempts);
 
     const supported = await this.words.supportedLengths();
     if (!supported.has(wordLength)) {

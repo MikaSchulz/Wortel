@@ -1,4 +1,4 @@
-import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assert, assertEquals } from "@std/assert";
 import { HINT_MIN_ZIPF, pickHint, ScoredWord } from "./hint.ts";
 import { GuessResult } from "./Guess.ts";
 import { LetterResult } from "./LetterResult.ts";
@@ -123,7 +123,16 @@ Deno.test("pickHint: weighted random biases toward higher Zipf", () => {
   // expected hand:haut ratio is ~2:1.
   let i = 0;
   const samples = [
-    0.05, 0.20, 0.35, 0.49, 0.51, 0.66, 0.80, 0.95, 0.10, 0.30,
+    0.05,
+    0.20,
+    0.35,
+    0.49,
+    0.51,
+    0.66,
+    0.80,
+    0.95,
+    0.10,
+    0.30,
   ];
   const rng = () => samples[i++ % samples.length];
   const counts: Record<string, number> = { hand: 0, haut: 0 };

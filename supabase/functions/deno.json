@@ -2,21 +2,30 @@
   "tasks": {
     "test": "deno test --allow-read --allow-env _shared/",
     "check": "deno check _shared/ games/",
-    "lint": "deno lint _shared/ games/"
+    "lint": "deno lint _shared/ games/",
+    "fmt": "deno fmt _shared/ games/",
+    "fmt:check": "deno fmt --check _shared/ games/",
+    "verify": "deno task fmt:check && deno task check && deno task lint && deno task test"
   },
   "imports": {
-    "@std/assert": "jsr:@std/assert@1"
+    "@std/assert": "jsr:@std/assert@1",
+    "@std/path": "jsr:@std/path@1"
   },
   "fmt": {
     "lineWidth": 100,
     "indentWidth": 2,
     "useTabs": false,
     "semiColons": true,
-    "singleQuote": false
+    "singleQuote": false,
+    "exclude": [
+      "_shared/infrastructure/data/"
+    ]
   },
   "lint": {
     "rules": {
-      "tags": ["recommended"]
+      "tags": [
+        "recommended"
+      ]
     }
   }
 }

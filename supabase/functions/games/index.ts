@@ -8,29 +8,19 @@
 //   GET    /games/daily           -> today's daily challenge metadata
 //   POST   /games/daily           -> play today's daily (idempotent)
 //
-// Thin HTTP adapter. Business logic lives in `_shared/domain/` +
-// `_shared/application/`. SQL lives in `_shared/infrastructure/`.
+// Composition root: routing + wiring only. Business logic lives in
+// `_shared/domain/` + `_shared/application/`, SQL in `_shared/infrastructure/`.
 
 import { CreateGame } from "../_shared/application/CreateGame.ts";
+import { GetDailyChallenge } from "../_shared/application/GetDailyChallenge.ts";
 import { GetGame } from "../_shared/application/GetGame.ts";
 import { GetHint } from "../_shared/application/GetHint.ts";
 import { PlayDailyChallenge } from "../_shared/application/PlayDailyChallenge.ts";
 import { SubmitGuess } from "../_shared/application/SubmitGuess.ts";
-import { todayUtc } from "../_shared/domain/daily/DailyChallenge.ts";
 import { getUserId } from "../_shared/http/auth.ts";
-import {
-  errorResponse,
-  handlePreflight,
-  jsonResponse,
-} from "../_shared/http/cors.ts";
-import {
-  toDailyPlayResponse,
-  toMetaResponse,
-} from "../_shared/http/dailyDto.ts";
-import {
-  toCreateGameResponse,
-  toGameStateResponse,
-} from "../_shared/http/dto.ts";
+import { errorResponse, handlePreflight, jsonResponse } from "../_shared/http/cors.ts";
+import { toDailyPlayResponse, toMetaResponse } from "../_shared/http/dailyDto.ts";
+import { toCreateGameResponse, toGameStateResponse } from "../_shared/http/dto.ts";
 import { mapErrorToResponse } from "../_shared/http/errors.ts";
 import {
   assertUuid,
@@ -39,35 +29,39 @@ import {
   readJson,
 } from "../_shared/http/validation.ts";
 import { BundledWordRepository } from "../_shared/infrastructure/BundledWordRepository.ts";
+import { SupabaseAuthVerifier } from "../_shared/infrastructure/SupabaseAuthVerifier.ts";
 import { SupabaseDailyChallengeRepository } from "../_shared/infrastructure/SupabaseDailyChallengeRepository.ts";
 import { SupabaseGameRepository } from "../_shared/infrastructure/SupabaseGameRepository.ts";
-import { serviceClient } from "../_shared/infrastructure/supabaseClient.ts";
+import { publicClient, serviceClient } from "../_shared/infrastructure/supabaseClient.ts";
+import { AuthVerifier } from "../_shared/ports/AuthVerifier.ts";
 
 interface Wiring {
+  auth: AuthVerifier;
   create: CreateGame;
   get: GetGame;
   guess: SubmitGuess;
   hint: GetHint;
-  daily: PlayDailyChallenge;
-  dailyRepo: SupabaseDailyChallengeRepository;
-  words: BundledWordRepository;
+  dailyMeta: GetDailyChallenge;
+  dailyPlay: PlayDailyChallenge;
 }
 
+// Built lazily once per isolate: env vars are only guaranteed at request
+// time, and reusing clients keeps connections + the JWKS cache warm.
 let wired: Wiring | null = null;
-function useCases(): Wiring {
+function wiring(): Wiring {
   if (wired) return wired;
-  const client = serviceClient();
-  const games = new SupabaseGameRepository(client);
-  const dailyRepo = new SupabaseDailyChallengeRepository(client);
+  const db = serviceClient();
+  const games = new SupabaseGameRepository(db);
+  const daily = new SupabaseDailyChallengeRepository(db);
   const words = new BundledWordRepository();
   wired = {
+    auth: new SupabaseAuthVerifier(publicClient()),
     create: new CreateGame(games, words),
     get: new GetGame(games),
     guess: new SubmitGuess(games, words),
     hint: new GetHint(games, words),
-    daily: new PlayDailyChallenge(dailyRepo, words),
-    dailyRepo,
-    words,
+    dailyMeta: new GetDailyChallenge(daily, words),
+    dailyPlay: new PlayDailyChallenge(daily, words),
   };
   return wired;
 }
@@ -115,28 +109,27 @@ Deno.serve(async (req) => {
 });
 
 async function handleCreate(req: Request): Promise<Response> {
+  const w = wiring();
   const body = parseCreateGameBody(await readJson(req));
-  const ownerId = await getUserId(req);
-  const game = await useCases().create.execute({ ...body, ownerId });
+  const ownerId = await getUserId(req, w.auth);
+  const game = await w.create.execute({ ...body, ownerId });
   return jsonResponse(req, toCreateGameResponse(game), { status: 201 });
 }
 
 async function handleGet(req: Request, id: string): Promise<Response> {
   assertUuid(id);
-  const userId = await getUserId(req);
-  const game = await useCases().get.execute({ gameId: id, userId });
+  const w = wiring();
+  const userId = await getUserId(req, w.auth);
+  const game = await w.get.execute({ gameId: id, userId });
   return jsonResponse(req, toGameStateResponse(game));
 }
 
 async function handleGuess(req: Request, id: string): Promise<Response> {
   assertUuid(id);
+  const w = wiring();
   const body = parseGuessBody(await readJson(req));
-  const userId = await getUserId(req);
-  const result = await useCases().guess.execute({
-    gameId: id,
-    guess: body.guess,
-    userId,
-  });
+  const userId = await getUserId(req, w.auth);
+  const result = await w.guess.execute({ gameId: id, guess: body.guess, userId });
   // Word-level rejection is normal gameplay: respond 200 with the unchanged
   // game state plus a `rejectedGuess` marker. Real errors (forbidden, not
   // found, game ended) still throw and surface as 4xx via mapErrorToResponse.
@@ -145,26 +138,24 @@ async function handleGuess(req: Request, id: string): Promise<Response> {
 
 async function handleHint(req: Request, id: string): Promise<Response> {
   assertUuid(id);
-  const userId = await getUserId(req);
-  const result = await useCases().hint.execute({ gameId: id, userId });
+  const w = wiring();
+  const userId = await getUserId(req, w.auth);
+  const result = await w.hint.execute({ gameId: id, userId });
   return jsonResponse(req, { hint: result.hint });
 }
 
 async function handleDailyMeta(req: Request): Promise<Response> {
-  const wiring = useCases();
-  const day = todayUtc();
-  const challenge = await wiring.dailyRepo.findOrCreate(day, async (length) => {
-    return await wiring.words.randomWord(length);
-  });
+  const challenge = await wiring().dailyMeta.execute();
   return jsonResponse(req, toMetaResponse(challenge));
 }
 
 async function handleDailyPlay(req: Request): Promise<Response> {
-  const userId = await getUserId(req);
+  const w = wiring();
+  const userId = await getUserId(req, w.auth);
   const anonymousId = req.headers.get(ANON_HEADER) ?? undefined;
   if (anonymousId) assertUuid(anonymousId, ANON_HEADER);
 
-  const result = await useCases().daily.execute({ userId, anonymousId });
+  const result = await w.dailyPlay.execute({ userId, anonymousId });
   return jsonResponse(
     req,
     toDailyPlayResponse(result.challenge, result.game, result.alreadyPlayed),

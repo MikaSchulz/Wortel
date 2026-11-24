@@ -1,7 +1,7 @@
 // Use-case-level tests using in-memory adapters. No Supabase, no I/O.
 // Run with: deno test --allow-read _shared/application/
 
-import { assert, assertEquals } from "jsr:@std/assert@1";
+import { assert, assertEquals } from "@std/assert";
 import { Game } from "../domain/game/Game.ts";
 import { DomainError } from "../domain/shared/DomainError.ts";
 import { ConcurrencyError, GameRepository } from "../ports/GameRepository.ts";

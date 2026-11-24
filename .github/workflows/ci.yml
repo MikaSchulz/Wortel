@@ -2,51 +2,61 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   pull_request:
-    branches: [main, master]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   edge-functions:
-    name: Deno tests + typecheck
+    name: Edge Functions (fmt, typecheck, lint, tests)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: supabase/functions
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Deno
         uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
+          cache: true
+          cache-hash: ${{ hashFiles('supabase/functions/deno.lock') }}
 
-      - name: Cache Deno deps
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/deno
-            ~/.cache/jsr
-          key: ${{ runner.os }}-deno-${{ hashFiles('supabase/functions/deno.json') }}
-          restore-keys: |
-            ${{ runner.os }}-deno-
+      - name: Format check
+        run: deno task fmt:check
 
       - name: Type-check
-        working-directory: supabase/functions
-        run: deno check _shared/ games/
-
-      - name: Run tests
-        working-directory: supabase/functions
-        run: deno test --allow-read --allow-env _shared/
+        run: deno task check
 
       - name: Lint
-        working-directory: supabase/functions
-        run: deno lint _shared/ games/
+        run: deno task lint
 
-  sql-syntax:
-    name: SQL migrations syntax
+      - name: Tests (incl. architecture rules)
+        run: deno task test
+
+  migrations:
+    name: Apply SQL migrations to a local Supabase Postgres
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Validate migration files exist
-        run: |
-          set -e
-          ls supabase/migrations/*.sql
-          echo "OK"
+      - uses: actions/checkout@v7
+
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 3.1.0
+
+      # Boots the same Postgres image Supabase runs in production and applies
+      # every file in supabase/migrations/ in order — a broken migration fails
+      # here instead of during the production `db push`.
+      - name: Start database + apply migrations
+        run: supabase db start
+
+      - name: Show applied migrations
+        run: supabase migration list --local

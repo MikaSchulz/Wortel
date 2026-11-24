@@ -2,7 +2,7 @@ name: Deploy to Supabase
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
     paths:
       - "supabase/**"
       - ".github/workflows/deploy.yml"
@@ -10,8 +10,12 @@ on:
     inputs:
       skip_migrations:
         description: "Skip db push (only deploy functions)"
+        type: boolean
         required: false
-        default: "false"
+        default: false
+
+permissions:
+  contents: read
 
 concurrency:
   group: supabase-deploy-${{ github.ref }}
@@ -19,103 +23,85 @@ concurrency:
 
 env:
   SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+  SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+  SUPABASE_CLI_VERSION: 3.1.0
 
 jobs:
   verify:
-    name: Verify (typecheck + tests + lint)
+    name: Verify (fmt + typecheck + lint + tests)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: supabase/functions
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - name: Cache Deno
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/deno
-            ~/.cache/jsr
-          key: ${{ runner.os }}-deno-${{ hashFiles('supabase/functions/deno.json') }}
-      - name: Type-check
-        working-directory: supabase/functions
-        run: deno check _shared/ games/
-      - name: Tests
-        working-directory: supabase/functions
-        run: deno test --allow-read --allow-env _shared/
-      - name: Lint
-        working-directory: supabase/functions
-        run: deno lint _shared/ games/
+          cache: true
+          cache-hash: ${{ hashFiles('supabase/functions/deno.lock') }}
+      - run: deno task verify
 
   deploy-db:
     name: Push DB migrations
     needs: verify
-    if: github.event.inputs.skip_migrations != 'true'
+    if: ${{ !inputs.skip_migrations }}
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v4
-      - uses: supabase/setup-cli@v1
+      - uses: actions/checkout@v7
+      - uses: supabase/setup-cli@v3
         with:
-          version: 2.101.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          version: ${{ env.SUPABASE_CLI_VERSION }}
       - name: Link project
         run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
-        env:
-          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
       - name: Push migrations
         run: supabase db push --password "$SUPABASE_DB_PASSWORD" --include-all
         env:
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
 
+  # Runs after the migrations so new code never hits an old schema.
   deploy-functions:
     name: Deploy Edge Functions
-    needs: verify
+    needs: [verify, deploy-db]
+    if: ${{ !cancelled() && needs.verify.result == 'success' && (needs.deploy-db.result == 'success' || needs.deploy-db.result == 'skipped') }}
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v4
-      - uses: supabase/setup-cli@v1
+      - uses: actions/checkout@v7
+      - uses: supabase/setup-cli@v3
         with:
-          version: 2.101.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          version: ${{ env.SUPABASE_CLI_VERSION }}
       - name: Link project
         run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
-        env:
-          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
       - name: Deploy games function
         run: supabase functions deploy games --project-ref "$SUPABASE_PROJECT_REF"
-        env:
-          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
       - name: Set function secrets (idempotent)
         run: |
           supabase secrets set \
             WORTEL_CORS_ALLOWED_ORIGINS="${WORTEL_CORS_ALLOWED_ORIGINS:-*}" \
             --project-ref "$SUPABASE_PROJECT_REF"
         env:
-          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
           WORTEL_CORS_ALLOWED_ORIGINS: ${{ secrets.WORTEL_CORS_ALLOWED_ORIGINS }}
 
   smoke-test:
     name: Smoke test deployed endpoint
-    needs: [deploy-db, deploy-functions]
+    needs: deploy-functions
     runs-on: ubuntu-latest
-    if: always() && needs.deploy-functions.result == 'success'
     steps:
-      - name: POST /games (anonymous)
+      - name: POST /games (anonymous) + GET /games/daily
+        env:
+          PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || secrets.SUPABASE_ANON_KEY }}
         run: |
-          set -e
-          PROJECT_REF="${{ secrets.SUPABASE_PROJECT_REF }}"
-          # Falls back to legacy anon key if publishable not set yet.
-          PUBLISHABLE_KEY="${{ secrets.SUPABASE_PUBLISHABLE_KEY }}"
-          if [ -z "$PUBLISHABLE_KEY" ]; then
-            PUBLISHABLE_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
-          fi
-          RESP=$(curl -sS -X POST \
-            "https://${PROJECT_REF}.supabase.co/functions/v1/games" \
+          set -euo pipefail
+          BASE="https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/games"
+          RESP=$(curl -sS --fail-with-body -X POST "$BASE" \
             -H "Authorization: Bearer ${PUBLISHABLE_KEY}" \
             -H "Content-Type: application/json" \
             -d '{"wordLength":5,"maxAttempts":6}')
           echo "$RESP"
-          echo "$RESP" | grep -q '"id"' || { echo "smoke test failed"; exit 1; }
+          echo "$RESP" | grep -q '"id"' || { echo "create smoke test failed"; exit 1; }
+          DAILY=$(curl -sS --fail-with-body "$BASE/daily" \
+            -H "Authorization: Bearer ${PUBLISHABLE_KEY}")
+          echo "$DAILY"
+          echo "$DAILY" | grep -q '"day"' || { echo "daily smoke test failed"; exit 1; }

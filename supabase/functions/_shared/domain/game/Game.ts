@@ -40,16 +40,7 @@ export class Game {
         `wordLength must be an integer >= 4, got ${args.wordLength}`,
       );
     }
-    if (
-      !Number.isInteger(args.maxAttempts) ||
-      args.maxAttempts < MIN_ATTEMPTS ||
-      args.maxAttempts > MAX_ATTEMPTS
-    ) {
-      throw new DomainError(
-        "INVALID_MAX_ATTEMPTS",
-        `maxAttempts must be in ${MIN_ATTEMPTS}..${MAX_ATTEMPTS}`,
-      );
-    }
+    Game.assertValidMaxAttempts(args.maxAttempts);
     const normalizedSecret = args.secretWord.toLowerCase();
     if (normalizedSecret.length !== args.wordLength) {
       throw new DomainError(
@@ -67,6 +58,16 @@ export class Game {
       GameStatus.RUNNING,
       0,
     );
+  }
+
+  /** Throws INVALID_MAX_ATTEMPTS unless `n` is an integer in range. */
+  static assertValidMaxAttempts(n: number): void {
+    if (!Number.isInteger(n) || n < MIN_ATTEMPTS || n > MAX_ATTEMPTS) {
+      throw new DomainError(
+        "INVALID_MAX_ATTEMPTS",
+        `maxAttempts must be in ${MIN_ATTEMPTS}..${MAX_ATTEMPTS}`,
+      );
+    }
   }
 
   /**

@@ -1,6 +1,6 @@
 import { DailyChallenge } from "../domain/daily/DailyChallenge.ts";
 import { Game } from "../domain/game/Game.ts";
-import { toGameStateResponse, GameStateResponse } from "./dto.ts";
+import { GameStateResponse, toGameStateResponse } from "./dto.ts";
 
 export interface DailyChallengeMetaResponse {
   day: string;
